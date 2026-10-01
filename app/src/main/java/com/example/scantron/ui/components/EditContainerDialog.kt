@@ -25,13 +25,13 @@ fun EditContainerDialog(
     initialContainerId: String = "",
     container: Container?,
     onDismiss: () -> Unit,
-    onSave: (Container) -> Unit
+    onSave: (Container) -> Unit,
 ) {
     var containerId by remember { mutableStateOf(container?.id ?: initialContainerId) }
     var name by remember { mutableStateOf(container?.name ?: "") }
     var location by remember { mutableStateOf(container?.location ?: "") }
     var notes by remember { mutableStateOf(container?.notes ?: "") }
-    var idError by remember { mutableStateOf(false) }
+    var idError by remember { mutableStateOf(value = false) }
 
     val isNew = container == null
     val scrollState = rememberScrollState()
@@ -39,7 +39,7 @@ fun EditContainerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
-            usePlatformDefaultWidth = false
+            usePlatformDefaultWidth = false,
         ),
         modifier = Modifier
             .fillMaxWidth(0.92f)
@@ -48,7 +48,7 @@ fun EditContainerDialog(
             Text(
                 text = if (isNew) "New Container" else "Edit Container Info",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         text = {
@@ -57,7 +57,7 @@ fun EditContainerDialog(
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
                     .padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 OutlinedTextField(
                     value = containerId,
@@ -74,9 +74,9 @@ fun EditContainerDialog(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Characters,
-                        imeAction = ImeAction.Next
+                        imeAction = ImeAction.Next,
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 OutlinedTextField(
@@ -88,9 +88,9 @@ fun EditContainerDialog(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Words,
-                        imeAction = ImeAction.Next
+                        imeAction = ImeAction.Next,
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 OutlinedTextField(
@@ -102,9 +102,9 @@ fun EditContainerDialog(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Words,
-                        imeAction = ImeAction.Next
+                        imeAction = ImeAction.Next,
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 OutlinedTextField(
@@ -118,7 +118,7 @@ fun EditContainerDialog(
                     maxLines = 4,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences,
-                        imeAction = ImeAction.Done
+                        imeAction = ImeAction.Done,
                     ),
                     keyboardActions = KeyboardActions(
                         onDone = {
@@ -129,14 +129,14 @@ fun EditContainerDialog(
                                         name = name.trim(),
                                         location = location.trim(),
                                         notes = notes.trim(),
-                                        updatedAt = System.currentTimeMillis()
-                                    )
+                                        updatedAt = System.currentTimeMillis(),
+                                    ),
                                 )
                             } else {
                                 idError = true
                             }
-                        }
-                    )
+                        },
+                    ),
                 )
             }
         },
@@ -151,11 +151,11 @@ fun EditContainerDialog(
                             name = name.trim(),
                             location = location.trim(),
                             notes = notes.trim(),
-                            updatedAt = System.currentTimeMillis()
+                            updatedAt = System.currentTimeMillis(),
                         )
                         onSave(updated)
                     }
-                }
+                },
             ) {
                 Text("Save Container")
             }
@@ -164,6 +164,6 @@ fun EditContainerDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
-        }
+        },
     )
 }

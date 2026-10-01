@@ -30,4 +30,10 @@ interface ContainerDao {
 
     @Delete
     suspend fun deleteContainer(container: Container)
+
+    @Query("DELETE FROM containers")
+    suspend fun deleteAllContainers()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllContainers(containers: List<Container>)
 }

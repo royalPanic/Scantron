@@ -17,7 +17,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -27,7 +26,7 @@ import com.example.scantron.data.ItemWithContainer
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel,
-    onNavigateToContainer: (String) -> Unit
+    onNavigateToContainer: (String) -> Unit,
 ) {
     val query by viewModel.searchQuery.collectAsState()
     val results by viewModel.searchResults.collectAsState()
@@ -39,8 +38,8 @@ fun SearchScreen(
                     Text("Search All Contents", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
             )
         }
     ) { padding ->
@@ -68,18 +67,12 @@ fun SearchScreen(
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
                     autoCorrect = false,
-                    imeAction = ImeAction.Search
+                    imeAction = ImeAction.Search,
                 ),
                 keyboardActions = KeyboardActions(
-                    onSearch = { }
+                    onSearch = { viewModel.onSearchQueryChanged(query) },
                 ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onKeyEvent { keyEvent ->
-                        if ((keyEvent.key == Key.Enter || keyEvent.key == Key.Tab) && keyEvent.type == KeyEventType.KeyUp) {
-                            true
-                        } else false
-                    }
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Text(
@@ -115,12 +108,13 @@ fun SearchScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(results, key = { it.item.id }) { itemWithContainer ->
+                        val containerId = itemWithContainer.container.id
                         SearchResultCard(
                             itemWithContainer = itemWithContainer,
-                            onClick = { onNavigateToContainer(itemWithContainer.container.id) }
+                            onClick = { onNavigateToContainer(containerId) },
                         )
                     }
                 }

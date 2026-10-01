@@ -1,7 +1,18 @@
 package com.example.scantron.ui.lookup
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -9,12 +20,36 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FabPosition
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -28,12 +63,14 @@ import com.example.scantron.ui.components.EditContainerDialog
 fun ContainerLookupScreen(
     viewModel: LookupViewModel,
     onNavigateToTagLookup: () -> Unit,
-    onNavigateToContainer: (String) -> Unit
+    onNavigateToContainer: (String) -> Unit,
+    onExportClick: () -> Unit,
+    onImportClick: () -> Unit,
 ) {
     val filterQuery by viewModel.filterQuery.collectAsState()
     val containers by viewModel.containersList.collectAsState()
 
-    var showCreateDialog by remember { mutableStateOf(false) }
+    var showCreateDialog by remember { mutableStateOf(value = false) }
 
     Scaffold(
         topBar = {
@@ -41,30 +78,44 @@ fun ContainerLookupScreen(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.Inventory2,
+                            imageVector = Icons.Default.Inventory2,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(end = 6.dp)
+                            modifier = Modifier.padding(end = 6.dp),
                         )
                         Text(
-                            "Containers",
+                            text = "Containers",
                             fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                     }
                 },
                 actions = {
+                    IconButton(onClick = onExportClick) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = "Export inventory",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    IconButton(onClick = onImportClick) {
+                        Icon(
+                            imageVector = Icons.Default.FolderOpen,
+                            contentDescription = "Import inventory",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     IconButton(onClick = onNavigateToTagLookup) {
                         Icon(
-                            Icons.Default.QrCodeScanner,
+                            imageVector = Icons.Default.QrCodeScanner,
                             contentDescription = "Scan / Lookup Tag",
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
             )
         },
         floatingActionButtonPosition = FabPosition.End,
@@ -75,9 +126,9 @@ fun ContainerLookupScreen(
                 text = { Text("New Container", fontWeight = FontWeight.Bold) },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.padding(bottom = 4.dp)
+                modifier = Modifier.padding(bottom = 4.dp),
             )
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -85,40 +136,39 @@ fun ContainerLookupScreen(
                 .padding(padding)
                 .imePadding()
                 .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            // Prominent Scanner Action Banner (4" screen optimized)
             Card(
                 onClick = onNavigateToTagLookup,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
                 ),
                 shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(12.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Row(
                         modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
                         Surface(
                             shape = MaterialTheme.shapes.small,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(38.dp),
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    Icons.Default.QrCodeScanner,
+                                    imageVector = Icons.Default.QrCodeScanner,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(22.dp),
                                 )
                             }
                         }
@@ -127,70 +177,76 @@ fun ContainerLookupScreen(
                                 text = "Scan / Lookup Container Tag",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
                             Text(
                                 text = "Tap to open hardware scanner / lookup",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                             )
                         }
                     }
 
                     Icon(
-                        Icons.Default.ChevronRight,
+                        imageVector = Icons.Default.ChevronRight,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
             }
 
-            // Filter bar
             OutlinedTextField(
                 value = filterQuery,
-                onValueChange = { viewModel.onFilterQueryChanged(it) },
+                onValueChange = viewModel::onFilterQueryChanged,
                 placeholder = { Text("Filter ${containers.size} containers...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(20.dp)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                    )
+                },
                 trailingIcon = {
                     if (filterQuery.isNotEmpty()) {
                         IconButton(onClick = { viewModel.onFilterQueryChanged("") }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(20.dp))
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Clear filter",
+                                modifier = Modifier.size(20.dp),
+                            )
                         }
                     }
                 },
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    imeAction = ImeAction.Done
-                ),
-                modifier = Modifier.fillMaxWidth()
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                modifier = Modifier.fillMaxWidth(),
             )
 
-            // Containers list
             if (containers.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
-                            Icons.Default.Inventory2,
+                            imageVector = Icons.Default.Inventory2,
                             contentDescription = null,
                             modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.outline
+                            tint = MaterialTheme.colorScheme.outline,
                         )
                         Text(
-                            "No containers found",
+                            text = "No containers found",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.outline
+                            color = MaterialTheme.colorScheme.outline,
                         )
                         Button(
-                            onClick = { viewModel.seedSampleData() },
-                            colors = ButtonDefaults.outlinedButtonColors()
+                            onClick = viewModel::seedSampleData,
+                            colors = ButtonDefaults.outlinedButtonColors(),
                         ) {
                             Text("Load Sample Containers")
                         }
@@ -199,13 +255,14 @@ fun ContainerLookupScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(containers, key = { it.id }) { container ->
+                        val openContainer = { onNavigateToContainer(container.id) }
                         ContainerCard(
                             container = container,
                             viewModel = viewModel,
-                            onClick = { onNavigateToContainer(container.id) }
+                            onClick = openContainer,
                         )
                     }
                 }
@@ -222,7 +279,7 @@ fun ContainerLookupScreen(
                     showCreateDialog = false
                     onNavigateToContainer(id)
                 }
-            }
+            },
         )
     }
 }
@@ -231,40 +288,46 @@ fun ContainerLookupScreen(
 fun ContainerCard(
     container: Container,
     viewModel: LookupViewModel,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     val itemCount by viewModel.getItemCountFlow(container.id).collectAsState(initial = 0)
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() },
+            .clickable(onClick = onClick),
         shape = MaterialTheme.shapes.small,
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     SuggestionChip(
-                        onClick = { onClick() },
-                        label = { Text(container.id, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium) },
-                        modifier = Modifier.height(28.dp)
+                        onClick = onClick,
+                        label = {
+                            Text(
+                                text = container.id,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        },
+                        modifier = Modifier.height(28.dp),
                     )
                     if (container.name.isNotBlank()) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = container.name,
                             style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
                         )
                     }
                 }
@@ -272,27 +335,32 @@ fun ContainerCard(
                 if (container.location.isNotBlank()) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
                         Icon(
-                            Icons.Default.LocationOn,
+                            imageVector = Icons.Default.LocationOn,
                             contentDescription = null,
                             modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                         Text(
                             text = container.location,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
             }
 
             AssistChip(
-                onClick = { onClick() },
-                label = { Text("$itemCount items", style = MaterialTheme.typography.labelSmall) },
-                modifier = Modifier.height(28.dp)
+                onClick = onClick,
+                label = {
+                    Text(
+                        text = "$itemCount items",
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                },
+                modifier = Modifier.height(28.dp),
             )
         }
     }

@@ -29,14 +29,14 @@ fun EditItemDialog(
     item: ContainerItem?,
     containerId: String,
     onDismiss: () -> Unit,
-    onSave: (ContainerItem) -> Unit
+    onSave: (ContainerItem) -> Unit,
 ) {
     var name by remember { mutableStateOf(item?.name ?: "") }
     var barcode by remember { mutableStateOf(item?.barcode ?: "") }
     var quantityText by remember { mutableStateOf(item?.quantity?.toString() ?: "1") }
     var category by remember { mutableStateOf(item?.category ?: "") }
     var notes by remember { mutableStateOf(item?.notes ?: "") }
-    var nameError by remember { mutableStateOf(false) }
+    var nameError by remember { mutableStateOf(value = false) }
 
     val currentQty = quantityText.toIntOrNull() ?: 1
     val scrollState = rememberScrollState()
@@ -44,7 +44,7 @@ fun EditItemDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
-            usePlatformDefaultWidth = false
+            usePlatformDefaultWidth = false,
         ),
         modifier = Modifier
             .fillMaxWidth(0.92f)
@@ -53,7 +53,7 @@ fun EditItemDialog(
             Text(
                 text = if (item == null) "Add Item to $containerId" else "Edit Item",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         },
         text = {
@@ -62,7 +62,7 @@ fun EditItemDialog(
                     .fillMaxWidth()
                     .verticalScroll(scrollState)
                     .padding(vertical = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 OutlinedTextField(
                     value = name,
@@ -78,9 +78,9 @@ fun EditItemDialog(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Words,
-                        imeAction = ImeAction.Next
+                        imeAction = ImeAction.Next,
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 OutlinedTextField(
@@ -93,32 +93,32 @@ fun EditItemDialog(
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Characters,
                         autoCorrect = false,
-                        imeAction = ImeAction.Next
+                        imeAction = ImeAction.Next,
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 // Quantity selector
                 Surface(
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         Text(
                             text = "Quantity",
                             style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
                         )
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             FilledIconButton(
                                 onClick = {
@@ -127,9 +127,9 @@ fun EditItemDialog(
                                     }
                                 },
                                 colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                 ),
-                                modifier = Modifier.size(38.dp)
+                                modifier = Modifier.size(38.dp),
                             ) {
                                 Icon(Icons.Default.Remove, contentDescription = "Decrease")
                             }
@@ -139,10 +139,10 @@ fun EditItemDialog(
                                 onValueChange = { quantityText = it.filter { char -> char.isDigit() } },
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Number,
-                                    imeAction = ImeAction.Next
+                                    imeAction = ImeAction.Next,
                                 ),
                                 modifier = Modifier.width(72.dp),
-                                singleLine = true
+                                singleLine = true,
                             )
 
                             FilledIconButton(
@@ -150,9 +150,9 @@ fun EditItemDialog(
                                     quantityText = (currentQty + 1).toString()
                                 },
                                 colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
+                                    containerColor = MaterialTheme.colorScheme.primary,
                                 ),
-                                modifier = Modifier.size(38.dp)
+                                modifier = Modifier.size(38.dp),
                             ) {
                                 Icon(Icons.Default.Add, contentDescription = "Increase")
                             }
@@ -169,9 +169,9 @@ fun EditItemDialog(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Words,
-                        imeAction = ImeAction.Next
+                        imeAction = ImeAction.Next,
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 OutlinedTextField(
@@ -185,7 +185,7 @@ fun EditItemDialog(
                     maxLines = 4,
                     keyboardOptions = KeyboardOptions(
                         capitalization = KeyboardCapitalization.Sentences,
-                        imeAction = ImeAction.Done
+                        imeAction = ImeAction.Done,
                     ),
                     keyboardActions = KeyboardActions(
                         onDone = {
@@ -200,14 +200,14 @@ fun EditItemDialog(
                                         quantity = finalQty,
                                         category = category.trim(),
                                         notes = notes.trim(),
-                                        updatedAt = System.currentTimeMillis()
-                                    )
+                                        updatedAt = System.currentTimeMillis(),
+                                    ),
                                 )
                             } else {
                                 nameError = true
                             }
-                        }
-                    )
+                        },
+                    ),
                 )
             }
         },
@@ -226,11 +226,11 @@ fun EditItemDialog(
                             quantity = finalQty,
                             category = category.trim(),
                             notes = notes.trim(),
-                            updatedAt = System.currentTimeMillis()
+                            updatedAt = System.currentTimeMillis(),
                         )
                         onSave(updatedItem)
                     }
-                }
+                },
             ) {
                 Text(if (item == null) "Add Item" else "Save Changes")
             }
@@ -239,6 +239,6 @@ fun EditItemDialog(
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
             }
-        }
+        },
     )
 }

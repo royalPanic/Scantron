@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.scantron.data.Container
 import com.example.scantron.data.ContainerItem
 import com.example.scantron.ui.components.EditContainerDialog
 import com.example.scantron.ui.components.EditItemDialog
@@ -26,16 +27,34 @@ import com.example.scantron.ui.components.EditItemDialog
 @Composable
 fun ContainerDetailScreen(
     viewModel: DetailViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
 ) {
     val container by viewModel.container.collectAsState()
     val items by viewModel.items.collectAsState()
 
     var editingItem by remember { mutableStateOf<ContainerItem?>(null) }
-    var showAddItemDialog by remember { mutableStateOf(false) }
-    var showEditContainerDialog by remember { mutableStateOf(false) }
-    var showDeleteContainerDialog by remember { mutableStateOf(false) }
+    var showAddItemDialog by remember { mutableStateOf(value = false) }
+    var showEditContainerDialog by remember { mutableStateOf(value = false) }
+    var showDeleteContainerDialog by remember { mutableStateOf(value = false) }
     var itemToDelete by remember { mutableStateOf<ContainerItem?>(null) }
+
+    val dismissAddItemDialog: () -> Unit = { showAddItemDialog = false }
+    val dismissEditItemDialog: () -> Unit = { editingItem = null }
+    val dismissEditContainerDialog: () -> Unit = { showEditContainerDialog = false }
+    val dismissDeleteContainerDialog: () -> Unit = { showDeleteContainerDialog = false }
+
+    val addNewItem: (ContainerItem) -> Unit = { newItem ->
+        viewModel.saveItem(newItem)
+        showAddItemDialog = false
+    }
+    val applyItemEdit: (ContainerItem) -> Unit = { updatedItem ->
+        viewModel.saveItem(updatedItem)
+        editingItem = null
+    }
+    val applyContainerEdit: (Container) -> Unit = { updatedContainer ->
+        viewModel.saveContainer(updatedContainer)
+        showEditContainerDialog = false
+    }
 
     Scaffold(
         topBar = {
@@ -45,13 +64,13 @@ fun ContainerDetailScreen(
                         Text(
                             text = "Container ${viewModel.containerId}",
                             fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
                         )
                         container?.name?.takeIf { it.isNotBlank() }?.let { name ->
                             Text(
                                 text = name,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
@@ -69,22 +88,22 @@ fun ContainerDetailScreen(
                         Icon(
                             Icons.Default.Delete,
                             contentDescription = "Delete Container",
-                            tint = MaterialTheme.colorScheme.error
+                            tint = MaterialTheme.colorScheme.error,
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
             )
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = { showAddItemDialog = true },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Add Item") }
+                text = { Text("Add Item") },
             )
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -92,38 +111,38 @@ fun ContainerDetailScreen(
                 .padding(padding)
                 .imePadding()
                 .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // Container Header Info Card
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 ),
                 shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
                             text = container?.name?.ifBlank { "Unlabeled Container" } ?: "Container ${viewModel.containerId}",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                         Badge(
                             containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
                         ) {
                             Text(
                                 text = "${items.size} items (${items.sumOf { it.quantity }} total)",
-                                modifier = Modifier.padding(4.dp)
+                                modifier = Modifier.padding(4.dp),
                             )
                         }
                     }
@@ -134,13 +153,13 @@ fun ContainerDetailScreen(
                                 Icons.Default.LocationOn,
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = MaterialTheme.colorScheme.primary,
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "Location: ${container?.location}",
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
                             )
                         }
                     }
@@ -149,7 +168,7 @@ fun ContainerDetailScreen(
                         Text(
                             text = "Notes: ${container?.notes}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
+                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
                         )
                     }
                 }
@@ -158,7 +177,7 @@ fun ContainerDetailScreen(
             Text(
                 text = "Items Inside Container",
                 style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
 
             // Items List
@@ -167,22 +186,22 @@ fun ContainerDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    contentAlignment = Alignment.Center
+                    contentAlignment = Alignment.Center,
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
                             Icons.Default.Inventory,
                             contentDescription = null,
                             modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.outline
+                            tint = MaterialTheme.colorScheme.outline,
                         )
                         Text(
                             "This container is empty",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.outline
+                            color = MaterialTheme.colorScheme.outline,
                         )
                         Button(onClick = { showAddItemDialog = true }) {
                             Text("Add First Item")
@@ -192,16 +211,17 @@ fun ContainerDetailScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(items, key = { it.id }) { item ->
+                        val updateQuantity: (Int) -> Unit = { newQty ->
+                            viewModel.updateItemQuantity(item, newQty)
+                        }
                         ItemCard(
                             item = item,
                             onEdit = { editingItem = item },
                             onDelete = { itemToDelete = item },
-                            onQuantityChange = { newQty ->
-                                viewModel.updateItemQuantity(item, newQty)
-                            }
+                            onQuantityChange = updateQuantity,
                         )
                     }
                 }
@@ -214,11 +234,8 @@ fun ContainerDetailScreen(
         EditItemDialog(
             item = null,
             containerId = viewModel.containerId,
-            onDismiss = { showAddItemDialog = false },
-            onSave = { newItem ->
-                viewModel.saveItem(newItem)
-                showAddItemDialog = false
-            }
+            onDismiss = dismissAddItemDialog,
+            onSave = addNewItem,
         )
     }
 
@@ -226,11 +243,8 @@ fun ContainerDetailScreen(
         EditItemDialog(
             item = item,
             containerId = viewModel.containerId,
-            onDismiss = { editingItem = null },
-            onSave = { updatedItem ->
-                viewModel.saveItem(updatedItem)
-                editingItem = null
-            }
+            onDismiss = dismissEditItemDialog,
+            onSave = applyItemEdit,
         )
     }
 
@@ -238,26 +252,25 @@ fun ContainerDetailScreen(
         EditContainerDialog(
             initialContainerId = viewModel.containerId,
             container = container,
-            onDismiss = { showEditContainerDialog = false },
-            onSave = { updatedContainer ->
-                viewModel.saveContainer(updatedContainer)
-                showEditContainerDialog = false
-            }
+            onDismiss = dismissEditContainerDialog,
+            onSave = applyContainerEdit,
         )
     }
 
     if (showDeleteContainerDialog) {
         AlertDialog(
-            onDismissRequest = { showDeleteContainerDialog = false },
+            onDismissRequest = dismissDeleteContainerDialog,
             title = { Text("Delete Container?") },
             text = { Text("Are you sure you want to delete container '${viewModel.containerId}' and all items inside it?") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         viewModel.deleteContainer(onDeleted = onNavigateBack)
-                        showDeleteContainerDialog = false
+                        dismissDeleteContainerDialog()
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
                 ) {
                     Text("Delete")
                 }
@@ -266,7 +279,7 @@ fun ContainerDetailScreen(
                 TextButton(onClick = { showDeleteContainerDialog = false }) {
                     Text("Cancel")
                 }
-            }
+            },
         )
     }
 
@@ -281,7 +294,7 @@ fun ContainerDetailScreen(
                         viewModel.deleteItem(item)
                         itemToDelete = null
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
                 ) {
                     Text("Delete")
                 }
@@ -290,7 +303,7 @@ fun ContainerDetailScreen(
                 TextButton(onClick = { itemToDelete = null }) {
                     Text("Cancel")
                 }
-            }
+            },
         )
     }
 }
@@ -300,39 +313,39 @@ fun ItemCard(
     item: ContainerItem,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
-    onQuantityChange: (Int) -> Unit
+    onQuantityChange: (Int) -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = item.name,
                         style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         if (item.category.isNotBlank()) {
                             SuggestionChip(
                                 onClick = { },
                                 label = { Text(item.category, style = MaterialTheme.typography.labelSmall) },
-                                modifier = Modifier.height(24.dp)
+                                modifier = Modifier.height(24.dp),
                             )
                         }
                         if (item.barcode.isNotBlank()) {
@@ -340,7 +353,7 @@ fun ItemCard(
                                 onClick = { },
                                 label = { Text(item.barcode, style = MaterialTheme.typography.labelSmall) },
                                 leadingIcon = { Icon(Icons.Default.QrCodeScanner, contentDescription = null, modifier = Modifier.size(12.dp)) },
-                                modifier = Modifier.height(24.dp)
+                                modifier = Modifier.height(24.dp),
                             )
                         }
                     }
@@ -356,7 +369,7 @@ fun ItemCard(
                             Icons.Default.Delete,
                             contentDescription = "Delete Item",
                             tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp),
                         )
                     }
                 }
@@ -366,7 +379,7 @@ fun ItemCard(
                 Text(
                     text = item.notes,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
@@ -376,18 +389,18 @@ fun ItemCard(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = "In Stock:",
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = { onQuantityChange(item.quantity - 1) },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
                     ) {
                         Icon(Icons.Default.Remove, contentDescription = "Decrease Quantity")
                     }
@@ -395,20 +408,20 @@ fun ItemCard(
                     Surface(
                         shape = MaterialTheme.shapes.small,
                         color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.padding(horizontal = 6.dp)
+                        modifier = Modifier.padding(horizontal = 6.dp),
                     ) {
                         Text(
-                            text = "${item.quantity}",
+                            text = item.quantity.toString(),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
 
                     IconButton(
                         onClick = { onQuantityChange(item.quantity + 1) },
-                        modifier = Modifier.size(32.dp)
+                        modifier = Modifier.size(32.dp),
                     ) {
                         Icon(Icons.Default.Add, contentDescription = "Increase Quantity")
                     }

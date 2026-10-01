@@ -1,7 +1,17 @@
 package com.example.scantron.ui.lookup
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardActions
@@ -11,13 +21,32 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -28,11 +57,17 @@ import androidx.compose.ui.unit.dp
 fun TagLookupScreen(
     viewModel: LookupViewModel,
     onNavigateToContainer: (String) -> Unit,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
 ) {
     val inputId by viewModel.inputId.collectAsState()
     val containers by viewModel.containersList.collectAsState()
     val focusRequester = remember { FocusRequester() }
+
+    val openEnteredContainer: () -> Unit = {
+        if (inputId.isNotBlank()) {
+            viewModel.openOrCreateContainer(inputId, onNavigateToContainer)
+        }
+    }
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -43,9 +78,9 @@ fun TagLookupScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "Scan / Lookup Tag",
+                        text = "Scan / Lookup Tag",
                         fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleMedium,
                     )
                 },
                 navigationIcon = {
@@ -54,10 +89,10 @@ fun TagLookupScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
             )
-        }
+        },
     ) { padding ->
         Column(
             modifier = Modifier
@@ -65,40 +100,40 @@ fun TagLookupScreen(
                 .padding(padding)
                 .imePadding()
                 .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // Scanner / Manual Entry Card (Optimized for 4" screens)
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
                 ),
                 shape = MaterialTheme.shapes.medium,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
                     modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Icon(
-                            Icons.Default.QrCodeScanner,
+                            imageVector = Icons.Default.QrCodeScanner,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = MaterialTheme.colorScheme.primary,
                         )
                         Text(
                             text = "Ready to Scan / Enter Tag",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
                         )
                     }
 
                     OutlinedTextField(
                         value = inputId,
-                        onValueChange = { viewModel.onInputIdChanged(it) },
+                        onValueChange = viewModel::onInputIdChanged,
                         placeholder = { Text("Scan or type container ID...") },
                         leadingIcon = {
                             Icon(Icons.Default.QrCodeScanner, contentDescription = null)
@@ -114,41 +149,40 @@ fun TagLookupScreen(
                         keyboardOptions = KeyboardOptions(
                             capitalization = KeyboardCapitalization.Characters,
                             autoCorrect = false,
-                            imeAction = ImeAction.Search
+                            imeAction = ImeAction.Search,
                         ),
                         keyboardActions = KeyboardActions(
-                            onSearch = {
-                                if (inputId.isNotBlank()) {
-                                    viewModel.openOrCreateContainer(inputId, onNavigateToContainer)
-                                }
-                            },
-                            onDone = {
-                                if (inputId.isNotBlank()) {
-                                    viewModel.openOrCreateContainer(inputId, onNavigateToContainer)
-                                }
-                            }
+                            onSearch = { openEnteredContainer() },
+                            onDone = { openEnteredContainer() },
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)
+                            // Hardware scanner engines (Honeywell virtual wedge, Zebra data
+                            // intent) deliver the decoded tag then a terminating Enter/Tab.
                             .onKeyEvent { keyEvent ->
-                                if ((keyEvent.key == Key.Enter || keyEvent.key == Key.Tab) && keyEvent.type == KeyEventType.KeyUp) {
-                                    if (inputId.isNotBlank()) {
-                                        viewModel.openOrCreateContainer(inputId, onNavigateToContainer)
-                                        true
-                                    } else false
-                                } else false
-                            }
+                                val scanTerminated = when (keyEvent.type) {
+                                    KeyEventType.KeyUp -> when (keyEvent.key) {
+                                        Key.Enter, Key.Tab -> true
+                                        else -> false
+                                    }
+                                    else -> false
+                                }
+                                if (scanTerminated && inputId.isNotBlank()) {
+                                    openEnteredContainer()
+                                    true
+                                } else {
+                                    false
+                                }
+                            },
                     )
 
                     Button(
-                        onClick = {
-                            viewModel.openOrCreateContainer(inputId, onNavigateToContainer)
-                        },
+                        onClick = openEnteredContainer,
                         enabled = inputId.isNotBlank(),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(48.dp),
                     ) {
                         Text("Open Container", fontWeight = FontWeight.Bold)
                     }
@@ -159,12 +193,12 @@ fun TagLookupScreen(
                 Text(
                     text = "Existing Containers (${containers.size})",
                     style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
                 )
 
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     items(containers, key = { it.id }) { container ->
                         Card(
@@ -173,37 +207,37 @@ fun TagLookupScreen(
                                 .clickable { onNavigateToContainer(container.id) },
                             shape = MaterialTheme.shapes.small,
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            )
+                                containerColor = MaterialTheme.colorScheme.surface,
+                            ),
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(10.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier.weight(1f),
                                 ) {
                                     Icon(
-                                        Icons.Default.Inventory2,
+                                        imageVector = Icons.Default.Inventory2,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(18.dp),
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         text = container.id,
                                         style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Bold
+                                        fontWeight = FontWeight.Bold,
                                     )
                                     if (container.name.isNotBlank()) {
                                         Text(
                                             text = " • ${container.name}",
                                             style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
                                 }

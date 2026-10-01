@@ -26,15 +26,21 @@ interface ItemDao {
     @Delete
     suspend fun deleteItem(item: ContainerItem)
 
+    @Query("DELETE FROM container_items")
+    suspend fun deleteAllItems()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAllItems(items: List<ContainerItem>)
+
     @Transaction
-    @Query("""
-        SELECT * FROM container_items 
-        WHERE name LIKE '%' || :query || '%' 
-           OR barcode LIKE '%' || :query || '%'
-           OR category LIKE '%' || :query || '%' 
-           OR notes LIKE '%' || :query || '%'
-        ORDER BY updatedAt DESC
-    """)
+    @Query(
+        "SELECT * FROM container_items " +
+            "WHERE name LIKE '%' || :query || '%' " +
+            "OR barcode LIKE '%' || :query || '%' " +
+            "OR category LIKE '%' || :query || '%' " +
+            "OR notes LIKE '%' || :query || '%' " +
+            "ORDER BY updatedAt DESC",
+    )
     fun searchItemsAcrossContainers(query: String): Flow<List<ItemWithContainer>>
 
     @Transaction
