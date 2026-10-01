@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
@@ -31,9 +32,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FabPosition
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -71,6 +73,14 @@ fun ContainerLookupScreen(
     val containers by viewModel.containersList.collectAsState()
 
     var showCreateDialog by remember { mutableStateOf(value = false) }
+    var showOverflowMenu by remember { mutableStateOf(value = false) }
+
+    val saveNewContainer: (Container) -> Unit = { newContainer ->
+        viewModel.createOrSaveContainer(newContainer) { id ->
+            showCreateDialog = false
+            onNavigateToContainer(id)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -91,25 +101,54 @@ fun ContainerLookupScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onExportClick) {
-                        Icon(
-                            imageVector = Icons.Default.Save,
-                            contentDescription = "Export inventory",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    IconButton(onClick = onImportClick) {
-                        Icon(
-                            imageVector = Icons.Default.FolderOpen,
-                            contentDescription = "Import inventory",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
                     IconButton(onClick = onNavigateToTagLookup) {
                         Icon(
                             imageVector = Icons.Default.QrCodeScanner,
                             contentDescription = "Scan / Lookup Tag",
                             tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    IconButton(onClick = { showOverflowMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options",
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showOverflowMenu,
+                        onDismissRequest = { showOverflowMenu = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("New Container", fontWeight = FontWeight.Bold) },
+                            onClick = {
+                                showOverflowMenu = false
+                                showCreateDialog = true
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Add, contentDescription = null)
+                            },
+                        )
+                        HorizontalDivider()
+                        DropdownMenuItem(
+                            text = { Text("Import Inventory") },
+                            onClick = {
+                                showOverflowMenu = false
+                                onImportClick()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.FolderOpen, contentDescription = null)
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Export Inventory") },
+                            onClick = {
+                                showOverflowMenu = false
+                                onExportClick()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Save, contentDescription = null)
+                            },
                         )
                     }
                 },
@@ -118,18 +157,7 @@ fun ContainerLookupScreen(
                 ),
             )
         },
-        floatingActionButtonPosition = FabPosition.End,
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showCreateDialog = true },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("New Container", fontWeight = FontWeight.Bold) },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-        },
-    ) { padding ->
+        ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -274,12 +302,7 @@ fun ContainerLookupScreen(
         EditContainerDialog(
             container = null,
             onDismiss = { showCreateDialog = false },
-            onSave = { newContainer ->
-                viewModel.createOrSaveContainer(newContainer) { id ->
-                    showCreateDialog = false
-                    onNavigateToContainer(id)
-                }
-            },
+            onSave = saveNewContainer,
         )
     }
 }

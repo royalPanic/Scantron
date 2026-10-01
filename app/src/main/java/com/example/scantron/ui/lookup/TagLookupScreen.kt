@@ -37,7 +37,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -63,8 +65,17 @@ fun TagLookupScreen(
     val containers by viewModel.containersList.collectAsState()
     val focusRequester = remember { FocusRequester() }
 
+    // A hardware scanner terminating keystroke can reach us through both the raw key
+    // event and the IME action, so guard against navigating to the container twice.
+    var navigationTriggered by remember { mutableStateOf(value = false) }
+
+    LaunchedEffect(inputId) {
+        navigationTriggered = false
+    }
+
     val openEnteredContainer: () -> Unit = {
-        if (inputId.isNotBlank()) {
+        if (inputId.isNotBlank() && !navigationTriggered) {
+            navigationTriggered = true
             viewModel.openOrCreateContainer(inputId, onNavigateToContainer)
         }
     }
