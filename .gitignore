@@ -16,6 +16,8 @@ captures/
 *.aab
 *.apk
 output-metadata.json
+*.dm
+baselineProfiles/
 
 # IntelliJ
 *.iml

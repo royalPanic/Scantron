@@ -1,9 +1,13 @@
 package com.example.scantron
 
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -12,7 +16,12 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -20,6 +29,7 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.example.scantron.data.ExportImportManager
 import com.example.scantron.ui.detail.ContainerDetailScreen
 import com.example.scantron.ui.detail.DetailViewModel
 import com.example.scantron.ui.lookup.ContainerLookupScreen
@@ -30,6 +40,8 @@ import com.example.scantron.ui.navigation.UriEncoder
 import com.example.scantron.ui.search.SearchScreen
 import com.example.scantron.ui.search.SearchViewModel
 import com.example.scantron.ui.theme.ScantronTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,12 +51,17 @@ class MainActivity : ComponentActivity() {
             ScantronTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
                     ScantronApp()
                 }
             }
         }
+    }
+
+    companion object {
+        const val EXPORT_FILENAME = ExportImportManager.DEFAULT_FILENAME
+        const val FILE_MIME_TYPE = ExportImportManager.MIME_TYPE
     }
 }
 
@@ -58,10 +75,76 @@ fun ScantronApp() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // URI holders for pending export/import operations
+    var exportUri: Uri? by rememberSaveable { mutableStateOf(null) }
+    var importUri: Uri? by rememberSaveable { mutableStateOf(null) }
+
+    val exportImportManager = remember { ExportImportManager(context, repository) }
+
+    // Export file launcher - creates a new file for the export
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(MainActivity.FILE_MIME_TYPE),
+    ) { uri: Uri? ->
+        exportUri = uri
+    }
+
+    // Import file launcher - opens existing file for import
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        importUri = uri
+    }
+
+    // Handle export when the user has chosen a destination
+    LaunchedEffect(exportUri) {
+        exportUri?.let { uri ->
+            val result = withContext(Dispatchers.IO) {
+                exportImportManager.exportToJson(uri)
+            }
+            Toast.makeText(
+                context,
+                if (result.success) {
+                    "Exported ${result.containerCount} containers and ${result.itemCount} items"
+                } else {
+                    result.message
+                },
+                Toast.LENGTH_LONG,
+            ).show()
+            exportUri = null
+        }
+    }
+
+    // Handle import when the user has chosen a file
+    LaunchedEffect(importUri) {
+        importUri?.let { uri ->
+            val result = withContext(Dispatchers.IO) {
+                exportImportManager.importFromJson(uri)
+            }
+            Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+            importUri = null
+        }
+    }
+
+    val navigateToContainer: (String) -> Unit = { containerId ->
+        navController.navigate(NavRoutes.ContainerDetail.createRoute(containerId))
+    }
+
+    // Scanning a tag should land on the container, not leave the lookup screen behind it.
+    val navigateToContainerReplacingTagLookup: (String) -> Unit = { containerId ->
+        navController.navigate(NavRoutes.ContainerDetail.createRoute(containerId)) {
+            popUpTo(NavRoutes.TagLookup.route) { inclusive = true }
+        }
+    }
+
+    val popBackStack: () -> Unit = { navController.popBackStack() }
+
+    // Hoisted so the nav graph can pass function references instead of trailing lambdas.
+    val launchExport: () -> Unit = { exportLauncher.launch(MainActivity.EXPORT_FILENAME) }
+    val launchImport: () -> Unit = { importLauncher.launch(arrayOf(MainActivity.FILE_MIME_TYPE)) }
+
     Scaffold(
         bottomBar = {
-            // Only show bottom navigation on top-level screens
-            if (currentRoute == NavRoutes.Containers.route || currentRoute == NavRoutes.Search.route) {
+            if ((currentRoute == NavRoutes.Containers.route) || (currentRoute == NavRoutes.Search.route)) {
                 NavigationBar {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Inventory2, contentDescription = "Containers") },
@@ -75,7 +158,7 @@ fun ScantronApp() {
                                 launchSingleTop = true
                                 restoreState = true
                             }
-                        }
+                        },
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Search, contentDescription = "Search Items") },
@@ -89,79 +172,72 @@ fun ScantronApp() {
                                 launchSingleTop = true
                                 restoreState = true
                             }
-                        }
+                        },
                     )
                 }
             }
-        }
+        },
     ) { innerPadding ->
         NavHost(
             navController = navController,
             startDestination = NavRoutes.Containers.route,
             modifier = Modifier
                 .padding(innerPadding)
-                .imePadding()
+                .imePadding(),
         ) {
             composable(NavRoutes.Containers.route) {
                 val lookupViewModel: LookupViewModel = viewModel(
-                    factory = LookupViewModel.Factory(repository)
+                    factory = LookupViewModel.Factory(repository),
                 )
                 ContainerLookupScreen(
                     viewModel = lookupViewModel,
                     onNavigateToTagLookup = {
                         navController.navigate(NavRoutes.TagLookup.route)
                     },
-                    onNavigateToContainer = { containerId ->
-                        navController.navigate(NavRoutes.ContainerDetail.createRoute(containerId))
-                    }
+                    onNavigateToContainer = navigateToContainer,
+                    onExportClick = launchExport,
+                    onImportClick = launchImport,
                 )
             }
 
             composable(NavRoutes.TagLookup.route) {
                 val lookupViewModel: LookupViewModel = viewModel(
-                    factory = LookupViewModel.Factory(repository)
+                    factory = LookupViewModel.Factory(repository),
                 )
                 TagLookupScreen(
                     viewModel = lookupViewModel,
-                    onNavigateToContainer = { containerId ->
-                        // Replace tag lookup screen in backstack with target container detail
-                        navController.navigate(NavRoutes.ContainerDetail.createRoute(containerId)) {
-                            popUpTo(NavRoutes.TagLookup.route) { inclusive = true }
-                        }
-                    },
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateToContainer = navigateToContainerReplacingTagLookup,
+                    onNavigateBack = popBackStack,
                 )
             }
 
             composable(NavRoutes.Search.route) {
                 val searchViewModel: SearchViewModel = viewModel(
-                    factory = SearchViewModel.Factory(repository)
+                    factory = SearchViewModel.Factory(repository),
                 )
                 SearchScreen(
                     viewModel = searchViewModel,
-                    onNavigateToContainer = { containerId ->
-                        navController.navigate(NavRoutes.ContainerDetail.createRoute(containerId))
-                    }
+                    onNavigateToContainer = navigateToContainer,
                 )
             }
 
             composable(
                 route = NavRoutes.ContainerDetail.route,
                 arguments = listOf(
-                    navArgument("containerId") { type = NavType.StringType }
-                )
+                    navArgument("containerId") { type = NavType.StringType },
+                ),
             ) { backStackEntry ->
                 val encodedId = backStackEntry.arguments?.getString("containerId") ?: ""
                 val containerId = UriEncoder.decode(encodedId)
 
                 val detailViewModel: DetailViewModel = viewModel(
                     key = containerId,
-                    factory = DetailViewModel.Factory(containerId, repository)
+                    factory = DetailViewModel.Factory(containerId, repository),
                 )
 
                 ContainerDetailScreen(
                     viewModel = detailViewModel,
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = popBackStack,
                 )
             }
         }

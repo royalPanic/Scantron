@@ -1,12 +1,27 @@
 package com.example.scantron.data
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 
 class ContainerRepository(
     private val containerDao: ContainerDao,
-    private val itemDao: ItemDao
+    private val itemDao: ItemDao,
 ) {
     val allContainers: Flow<List<Container>> = containerDao.getAllContainers()
+
+    suspend fun getAllContainersDirect(): List<Container> = allContainers.first()
+
+    suspend fun getItemsForContainerDirect(containerId: String): List<ContainerItem> = getItemsForContainer(containerId).first()
+
+    suspend fun clearAllData() {
+        itemDao.deleteAllItems()
+        containerDao.deleteAllContainers()
+    }
+
+    suspend fun importAll(containers: List<Container>, items: List<ContainerItem>) {
+        containerDao.insertAllContainers(containers)
+        itemDao.insertAllItems(items)
+    }
 
     fun getContainer(containerId: String): Flow<Container?> =
         containerDao.getContainerByIdFlow(containerId)
@@ -47,9 +62,6 @@ class ContainerRepository(
             itemDao.searchItemsAcrossContainers(query)
         }
     }
-
-    fun searchContainers(query: String): Flow<List<Container>> =
-        containerDao.searchContainers(query)
 
     suspend fun seedSampleDataIfEmpty() {
         // Pre-populate demo containers if none exist
