@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+        Honeywell Data Collection Service (DCS) ships with the CK65 firmware. The app
+        declares this so it is eligible to receive the DCS "Data Intent" broadcasts that
+        carry decoded barcode data. No Honeywell SDK dependency is required.
+    -->
+    <uses-permission android:name="com.honeywell.decode.permission.DECODE" />
+
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
+
+
     <application
         android:name=".ScantronApplication"
         android:allowBackup="true"

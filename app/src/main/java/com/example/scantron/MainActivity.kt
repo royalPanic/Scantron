@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,12 +25,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
+import com.example.scantron.data.Container
 import com.example.scantron.data.ExportImportManager
+import com.example.scantron.scanner.HoneywellScanReceiver
+import com.example.scantron.scanner.ScanBus
+import com.example.scantron.scanner.ScanSessionViewModel
+import com.example.scantron.ui.components.OpenOrCreateContainerDialog
 import com.example.scantron.ui.detail.ContainerDetailScreen
 import com.example.scantron.ui.detail.DetailViewModel
 import com.example.scantron.ui.lookup.ContainerLookupScreen
@@ -44,9 +51,25 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+
+    // Created in onCreate and torn down in onDestroy. A fresh instance is used for each
+    // registration so the receiver never outlives the activity.
+    private val scanReceiver = HoneywellScanReceiver()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Listen for Honeywell Data Intent broadcasts from the CK65 Data Collection Service.
+        // RECEIVER_EXPORTED is required because the broadcast originates in another process;
+        // ContextCompat picks the right flag for the running API level.
+        ContextCompat.registerReceiver(
+            this,
+            scanReceiver,
+            HoneywellScanReceiver.intentFilter(),
+            ContextCompat.RECEIVER_EXPORTED,
+        )
+
         setContent {
             ScantronTheme {
                 Surface(
@@ -57,6 +80,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        runCatching { unregisterReceiver(scanReceiver) }
+        super.onDestroy()
     }
 
     companion object {
@@ -127,6 +155,42 @@ fun ScantronApp() {
 
     val navigateToContainer: (String) -> Unit = { containerId ->
         navController.navigate(NavRoutes.ContainerDetail.createRoute(containerId))
+    }
+
+    // ---- Honeywell Data Intent scan plumbing -------------------------------------------
+
+    val scanSessionViewModel: ScanSessionViewModel = viewModel(
+        factory = ScanSessionViewModel.Factory(repository),
+    )
+    val containerPrompt by scanSessionViewModel.containerPrompt.collectAsState()
+    val pendingScans by scanSessionViewModel.pendingScans.collectAsState()
+    val allContainers by repository.allContainers.collectAsState(initial = emptyList())
+
+    // The container detail screen is the single source of truth for "a container is open".
+    val activeContainerId: String? = remember(navBackStackEntry, currentRoute) {
+        if (currentRoute == NavRoutes.ContainerDetail.route) {
+            navBackStackEntry?.arguments?.getString("containerId")?.let(UriEncoder::decode)
+        } else {
+            null
+        }
+    }
+
+    LaunchedEffect(activeContainerId) {
+        scanSessionViewModel.onActiveContainerChanged(activeContainerId)
+    }
+
+    // Single collector for the process-wide scan bus.
+    LaunchedEffect(Unit) {
+        ScanBus.events.collect { event ->
+            scanSessionViewModel.onScan(event, navigateToContainer)
+        }
+    }
+
+    val openContainerFromScan: (String) -> Unit = { containerId ->
+        scanSessionViewModel.onContainerResolved(containerId, navigateToContainer)
+    }
+    val createContainerFromScan: (Container) -> Unit = { container ->
+        scanSessionViewModel.onContainerCreated(container, navigateToContainer)
     }
 
     // Scanning a tag should land on the container, not leave the lookup screen behind it.
@@ -235,11 +299,40 @@ fun ScantronApp() {
                     factory = DetailViewModel.Factory(containerId, repository),
                 )
 
+                val containerPendingScans = pendingScans.filter { it.containerId == containerId }
+
                 ContainerDetailScreen(
                     viewModel = detailViewModel,
                     onNavigateBack = popBackStack,
+                    pendingScans = containerPendingScans,
+                    onCommitPendingScans = {
+                        scanSessionViewModel.commitPendingScans(containerId) { count ->
+                            Toast.makeText(
+                                context,
+                                "Added $count unit(s) to $containerId",
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    },
+                    onDiscardPendingScan = { scan ->
+                        scanSessionViewModel.discardPendingScan(scan.id)
+                    },
+                    onDiscardAllPendingScans = {
+                        scanSessionViewModel.discardAllPendingScans(containerId)
+                    },
                 )
             }
         }
+    }
+
+    // A scan arrived while no container was open - ask which container it belongs to.
+    containerPrompt?.let { scanEvent ->
+        OpenOrCreateContainerDialog(
+            scannedValue = scanEvent.data,
+            containers = allContainers,
+            onOpenExisting = openContainerFromScan,
+            onCreateNew = createContainerFromScan,
+            onDismiss = { scanSessionViewModel.dismissContainerPrompt() },
+        )
     }
 }

@@ -40,9 +40,26 @@ class DetailViewModel(
         }
     }
 
+    /**
+     * Saves an edit to an existing item. The row is written as given, so editing never merges.
+     */
     fun saveItem(item: ContainerItem) {
         viewModelScope.launch {
             repository.saveItem(item)
+        }
+    }
+
+    /**
+     * Adds a newly entered item, folding it into a matching row when the container already holds
+     * that thing - by barcode, or by name when the new item carries no barcode of its own.
+     * Adding the same name-only item twice raises one row's quantity instead of duplicating it.
+     *
+     * @return the row as it now stands, or null when the container is missing the parent record.
+     */
+    fun addItem(item: ContainerItem, onAdded: (ContainerItem) -> Unit = {}) {
+        viewModelScope.launch {
+            val merged = repository.addItemMerging(item)
+            onAdded(merged)
         }
     }
 

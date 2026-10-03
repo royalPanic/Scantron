@@ -313,7 +313,7 @@ fun ContainerCard(
     viewModel: LookupViewModel,
     onClick: () -> Unit,
 ) {
-    val itemCount by viewModel.getItemCountFlow(container.id).collectAsState(initial = 0)
+    val totalQuantity by viewModel.getTotalQuantityFlow(container.id).collectAsState(initial = 0)
 
     Card(
         modifier = Modifier
@@ -379,7 +379,7 @@ fun ContainerCard(
                 onClick = onClick,
                 label = {
                     Text(
-                        text = "$itemCount items",
+                        text = if (totalQuantity == 1) "1 item" else "$totalQuantity items",
                         style = MaterialTheme.typography.labelSmall,
                     )
                 },

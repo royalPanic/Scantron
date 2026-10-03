@@ -1,92 +1,386 @@
 # Scantron Container Inventory
 
-**Scantron Container Inventory** is a modern Android application designed for physical container tracking, warehouse inventory management, and cross-container item search. The app is optimized for both consumer smartphones and enterprise handheld mobile computers (such as the **Honeywell Mobility CK65** and Zebra TC-series scanners).
+**Scantron Container Inventory** is an Android application for physical container tracking,
+warehouse inventory management, and cross-container item search. It is built for enterprise
+handheld mobile computers — primarily the **Honeywell CK65** — and degrades gracefully to
+ordinary consumer phones.
+
+Scans reach the app through Honeywell's **Data Intent** broadcast system, so there is **no
+Honeywell SDK or IntentAPI dependency** — just a `BroadcastReceiver` and the manifest
+permission that unlocks it.
 
 ---
 
-## 🌟 Key Features
+## 📑 Table of Contents
 
-### 🏷️ Physical Container Lookup
-* **Instant Tag Search**: Dedicated scanner page for scanning or typing physical container tag IDs (e.g., `BOX-101`, `BIN-05`, `SHELF-A`).
-* **Hardware Barcode Intercept**: Intercepts `Key.Enter` / `Key.Tab` events sent by hardware 2D barcode scanner engines (Honeywell DataCollection / Virtual Wedge) for instant zero-tap container opening.
-* **Auto-Creation**: Typing or scanning a new container tag automatically provisions a container shell ready for item entry.
-
-### 📦 Inventory & Item Management
-* **Container Details**: View and manage container metadata including Tag ID, Friendly Name (e.g. *Garage Power Tools*), Location (e.g. *Shelf 2-A*), and Notes.
-* **Item Tracking**: Add, edit, and remove container contents with item names, optional **barcodes/SKUs**, stock quantities, categories, and descriptive notes.
-* **In-Place Quantity Adjustments**: Adjust item stock quantities directly on each card using `-` and `+` controls.
-
-### 🔍 Global Cross-Container Search
-* **Search Everything**: Search stored inventory across all containers by item name, category, notes, or scanned barcode/SKU.
-* **Container Location Badges**: Search results highlight the exact physical container tag ID and location where each item is stored.
-* **Direct Jump**: Tapping any search result navigates directly to that container's full inventory.
-
-### 🏭 Enterprise & Handheld Mobile Computer Optimizations
-* **Optimized for Honeywell CK65**: Tailored for 4.0-inch WVGA (480 × 800) compact displays and physical 51-key / 38-key keypads.
-* **Compact High-Density UI**: Reduced padding and dense card layouts fit 4–5 containers/items on small screens simultaneously without excessive scrolling.
-* **Industrial Ergonomics**: Touch targets adhere to 48dp+ accessibility standards for easy single-handed thumb tapping or gloved-hand operation.
-* **Bottom-Anchored FAB**: The `+ New Container` button is anchored at the bottom right above the bottom navigation bar for comfortable thumb reach.
+1. [Quick start](#-quick-start)
+2. [CK65 device setup](#-ck65-device-setup) — **required before scanning works**
+3. [How scanning works](#-how-scanning-works)
+4. [Item merging rules](#-item-merging-rules)
+5. [Feature overview](#-feature-overview)
+6. [Architecture](#-architecture)
+7. [Project structure](#-project-structure)
+8. [Database schema](#-database-schema)
+9. [Tech stack](#-tech-stack)
+10. [Building, running and testing](#-building-running-and-testing)
+11. [Troubleshooting](#-troubleshooting)
+12. [License](#-license)
 
 ---
 
-## 📱 Tech Stack & Architecture
+## 🚀 Quick start
 
-* **Language**: Kotlin 2.0.21
-* **UI Toolkit**: Jetpack Compose with Material 3 Design
-* **Database**: Room 2.6.1 with KSP (`com.google.devtools.ksp`) annotation processing
-* **Database Migration**: Includes SQLite `MIGRATION_1_2` for adding item barcode tracking
-* **Navigation**: Jetpack Navigation Compose
-* **Platform Target**: Android 13 (API Level 33) with backward compatibility to Android 7.0 (API 24)
-* **Edge-to-Edge & Insets**: Native `enableEdgeToEdge()` and `imePadding()` support for soft keyboard resizing without UI overlap
-* **Build System**: Gradle 9.0 (Kotlin DSL)
+```bash
+git clone <your-repo-url> scantron
+cd scantron
+./gradlew assembleDebug
+./gradlew installDebug
+```
+
+The app runs on any Android 7.0+ device. **Barcode scanning requires the Honeywell Data
+Collection Service**, which ships with CK65 firmware — so on a plain phone, use the on-screen
+keyboard via the *Add Item* FAB or the *Scan / Lookup* field.
+
+> ⚠️ **Scanning on a CK65 does nothing until the device is configured.** See
+> [CK65 device setup](#-ck65-device-setup).
 
 ---
 
-## 🗄️ Database Schema
+## ⚙️ CK65 device setup
 
-### `containers` Table
+This is a **one-time configuration on the handheld**. The app cannot receive anything until it
+is done.
+
+1. `Settings > Honeywell Settings > Scanning > Internal Scanner > Default Profile > Data Processing Settings`
+2. Enable **Data Intent**
+3. Set **Data Intent Action** to:
+
+   ```
+   com.example.scantron.action.BARCODE_SCAN
+   ```
+
+4. Set **Category** to:
+
+   ```
+   android.intent.category.DEFAULT
+   ```
+
+5. Leave **Package Name**, **Class Name** and **Extra Key** blank.
+
+> [!IMPORTANT]
+> **Category is not optional.** Action and Category must both be set. Because the Data
+> Collection Service sends a *broadcast* (not an activity start), Android does **not**
+> auto-append `CATEGORY_DEFAULT` — the value is pure string matching against the app's
+> `IntentFilter`. If the device and app disagree, the broadcast silently does not arrive.
+
+> [!TIP]
+> Do **not** leave the virtual wedge enabled in the same profile. If the wedge types into the
+> *Scan / Lookup* field *and* the Data Intent broadcast is delivered, every scan registers twice.
+
+> [!NOTE]
+> Leaving **Extra Key** blank gives you the default extras:
+> `data`, `dataBytes`, `charset`, `codeId`, `aimId`, `timestamp`, `version`.
+> Setting a custom Extra Key remaps them — the app reads the defaults, so leave it blank.
+
+### Permission
+
+The app declares the Honeywell decode permission in its manifest:
+
+```xml
+<uses-permission android:name="com.honeywell.decode.permission.DECODE" />
+```
+
+There is no runtime permission prompt and no SDK to initialise.
+
+---
+
+## 🔍 How scanning works
+
+```mermaid
+flowchart TD
+    A[CK65 scan] --> B["DCS broadcasts<br/>com.example.scantron.action.BARCODE_SCAN<br/>+ android.intent.category.DEFAULT"]
+    B --> C[HoneywellScanReceiver]
+    C --> D[ScanBus SharedFlow]
+    D --> E[ScanSessionViewModel.onScan]
+    E -->|code is an existing container| E2{already open?}
+    E2 -->|no| L[Navigate to that container]
+    E2 -->|yes| NOP[No-op]
+    E -->|not a container, one open| M{Seen this code<br/>for this container?}
+    M -->|yes| CNT[xN badge, count++]
+    M -->|no| F[PendingScans queue]
+    CNT --> G[PendingScansCard]
+    F --> G
+    G -->|Add All| H[addItemMerging:<br/>quantity raised, no duplicate rows]
+    E -->|not a container, none open| I[Assign Scanned Code dialog]
+    I -->|open existing| J[onContainerResolved]
+    I -->|create new| K[onContainerCreated]
+    J --> Q{scan == container id?}
+    K --> Q
+    Q -->|no| F
+    Q -->|yes| L3[Container created;<br/>scan not queued as an item]
+```
+
+### Classification rules
+
+Every scan is classified before anything happens to it:
+
+| Scanned code | Result |
+| :--- | :--- |
+| **Identifies an existing container** | Navigates straight into that container. Never queued as an item, so **a container can never end up inside itself**. Re-scanning the container already on screen is a no-op. |
+| Not a container, **a container is open** | Queued in the *Scanned Items* card. Nothing is written to the database until you confirm. |
+| Not a container, **nothing is open** | The **Assign Scanned Code** dialog asks where it goes. You can open an existing container or create a new one. |
+
+The classification performs a database lookup before deciding, so the whole decision runs under
+a `Mutex` — a burst of rapid scans cannot interleave and mis-route.
+
+### The pending queue
+
+Scans accumulate in a *Scanned Items* card on the container detail screen:
+
+- Scanning the **same code repeatedly increments one row** rather than adding duplicates.
+- A row scanned more than once shows an **`xN` badge**; the badge is hidden at `N = 1`.
+- The header shows total units and, when they differ, the number of distinct codes —
+  e.g. *Scanned Items (4 in 2 codes)*.
+- **Add All (n)** commits every queued code. **X** removes one entry, **Discard** clears them all.
+- Nothing reaches the database until you confirm, so a misfire costs nothing.
+
+---
+
+## 📦 Item merging rules
+
+Adding the same thing twice raises one row's quantity instead of creating a duplicate. A single
+function, [`ContainerRepository.addItemMerging`](app/src/main/java/com/example/scantron/data/ContainerRepository.kt),
+implements this for **both** entry points — hardware scans and the *Add Item* dialog.
+
+1. **Match by barcode** when the incoming item carries one.
+2. **Otherwise match by name**, but only against an item that has **no barcode of its own**
+   (case- and whitespace-insensitive). This is what lets name-only items accumulate, since they
+   have nothing scannable to identify them by — the identifier has to be typed.
+3. On a match, only `quantity` and `updatedAt` change. **`id`, `name`, `category` and `notes`
+   survive**, so re-adding an item never clobbers its details.
+
+> [!IMPORTANT]
+> An item that **already carries a barcode** is never matched by name. That barcode is its
+> identity — merging by name would silently conflate two different barcodes into one row.
+
+> [!NOTE]
+> **Editing** an item (`DetailViewModel.saveItem`) writes the row as given and never merges.
+> Only *adding* merges; editing must not silently change a quantity.
+
+---
+
+## 🌟 Feature overview
+
+### 🏷️ Container lookup
+
+- **Instant tag search** — scan or type a container tag (`BOX-101`, `BIN-05`, …).
+- **Hardware wedge intercept** — `Enter` / `Tab` from a hardware scanner engine opens the
+  container with zero taps.
+- **Auto-creation** — a new tag provisions a container shell ready for item entry.
+- **Quantity-accurate counts** — the list chip shows total **units**, not distinct rows, so a
+  container holding one line of *Screws, qty 12* reads **12 items**.
+
+### 📦 Inventory management
+
+- Container metadata: tag, friendly name, location, notes.
+- Items with name, optional barcode/SKU, quantity, category and notes.
+- **In-place quantity adjustment** with `−` / `+` on every item card.
+- **Quantity totals in context** — the detail header reads *2 items (3 total)*.
+
+### 🔍 Cross-container search
+
+- Search every container by item name, category, notes or barcode.
+- Results badge the physical container tag each item lives in.
+- Tapping a result jumps straight to that container.
+
+### 📤 Import / export
+
+- **Export Inventory** and **Import Inventory** in the containers overflow menu, via the
+  system document picker. `scantron_inventory.json`.
+
+### 🏭 Handheld optimisations
+
+- Tuned for the CK65's 4.0″ WVGA (480 × 800) display and physical keypad.
+- Dense card layouts; 48dp+ touch targets for gloved-hand operation.
+- Edge-to-edge with `imePadding()`, so the soft keyboard never covers inputs.
+- Long barcodes ellipsize rather than pushing controls off screen.
+
+---
+
+## 🏗️ Architecture
+
+- **MVVM** with `StateFlow` throughout; `ViewModelProvider.Factory` for construction.
+- **Unidirectional data flow**: `BroadcastReceiver → ScanBus → ScanSessionViewModel → Compose`.
+- The scan **receiver is registered dynamically**, not declared in the manifest. Implicit
+  broadcast restrictions on API 26+ apply to manifest entries but not to context-registered
+  receivers. `ContextCompat.registerReceiver` with `RECEIVER_EXPORTED` is used because the
+  broadcast originates in another process.
+- **Room** is the single source of truth; `Flow`-returning DAO queries drive the UI.
+
+---
+
+## 📁 Project structure
+
+```
+app/src/main/java/com/example/scantron/
+├── MainActivity.kt              Receiver registration, navigation graph, scan collection
+├── ScantronApplication.kt       Owns the database and repository
+├── scanner/
+│   ├── ScanEvent.kt             Decoded scan value object + DCS extra parsing
+│   ├── ScanBus.kt               Process-wide SharedFlow between receiver and UI
+│   ├── HoneywellScanReceiver.kt BroadcastReceiver for Data Intent scans
+│   └── ScanSessionViewModel.kt  Classification, pending queue, commit
+├── data/
+│   ├── Container.kt             Entity
+│   ├── ContainerItem.kt         Entity
+│   ├── AppDatabase.kt           Room database + migrations
+│   ├── ContainerDao.kt
+│   ├── ItemDao.kt               Includes total-quantity and merge lookups
+│   ├── ContainerRepository.kt   addItemMerging() lives here
+│   └── ExportImportManager.kt   JSON import / export
+└── ui/
+    ├── components/              EditContainerDialog, EditItemDialog,
+    │                            OpenOrCreateContainerDialog
+    ├── lookup/                  Containers list, Scan/Lookup screen
+    ├── detail/                  Container detail, PendingScansCard
+    ├── search/                  Cross-container search
+    ├── navigation/              Routes and URI encoding
+    └── theme/
+```
+
+---
+
+## 🗄️ Database schema
+
+### `containers`
+
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `id` (PK) | `TEXT` | Physical container tag/code (e.g., `BOX-101`) |
-| `name` | `TEXT` | Optional friendly container label |
-| `location` | `TEXT` | Physical location (e.g., `Shelf 2-A`) |
-| `notes` | `TEXT` | Additional details |
-| `updatedAt` | `INTEGER` | Epoch timestamp |
+| `id` (PK) | `TEXT` | Container tag/code (e.g. `BOX-101`) |
+| `name` | `TEXT` | Optional friendly label |
+| `location` | `TEXT` | Physical location (e.g. `Shelf 2-A`) |
+| `notes` | `TEXT` | Free-form details |
+| `updatedAt` | `INTEGER` | Epoch millis |
 
-### `container_items` Table
+### `container_items`
+
 | Column | Type | Description |
 | :--- | :--- | :--- |
-| `id` (PK) | `INTEGER` | Auto-generated ID |
-| `containerId` (FK) | `TEXT` | Foreign key referencing `containers(id)` |
+| `id` (PK) | `INTEGER` | Auto-generated |
+| `containerId` (FK) | `TEXT` | → `containers(id)`, `ON DELETE CASCADE` |
 | `name` | `TEXT` | Item name |
-| `barcode` | `TEXT` | Optional item barcode, SKU, or UPC |
-| `quantity` | `INTEGER` | In-stock quantity |
-| `category` | `TEXT` | Category tag (e.g., *Tools*, *Electronics*) |
-| `notes` | `TEXT` | Item description or serial numbers |
-| `updatedAt` | `INTEGER` | Epoch timestamp |
+| `barcode` | `TEXT` | Optional barcode / SKU / UPC |
+| `quantity` | `INTEGER` | Units in stock |
+| `category` | `TEXT` | Category tag |
+| `notes` | `TEXT` | Description / serial numbers |
+| `updatedAt` | `INTEGER` | Epoch millis |
+
+Indexed on `containerId` and `barcode`. Schema version 2, with `MIGRATION_1_2` adding the
+barcode column and its index.
+
+### Notable queries
+
+```kotlin
+// Total units, not rows. COALESCE is required: SUM over no rows yields NULL,
+// which does not map onto a non-null Int and would crash on an empty container.
+@Query("SELECT COALESCE(SUM(quantity), 0) FROM container_items WHERE containerId = :containerId")
+fun getTotalQuantityForContainer(containerId: String): Flow<Int>
+
+// Merge target 1: an item already carrying this barcode.
+@Query("SELECT * FROM container_items WHERE containerId = :containerId AND TRIM(barcode) = TRIM(:barcode) LIMIT 1")
+suspend fun getItemByBarcode(containerId: String, barcode: String): ContainerItem?
+
+// Merge target 2: a barcode-less item with this name.
+@Query("SELECT * FROM container_items WHERE containerId = :containerId AND TRIM(barcode) = '' AND LOWER(TRIM(name)) = LOWER(TRIM(:name)) LIMIT 1")
+suspend fun getNameOnlyItemByName(containerId: String, name: String): ContainerItem?
+```
 
 ---
 
-## 🛠️ Building & Running
+## 🔧 Tech stack
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/your-repo/scantron.git
-   cd scantron
-   ```
+| | |
+| :--- | :--- |
+| Language | Kotlin 2.0.21 |
+| UI | Jetpack Compose, Material 3 |
+| Database | Room 2.6.1 (KSP) |
+| Navigation | Navigation Compose |
+| Async | Coroutines / Flow |
+| min / target / compile SDK | 24 / 33 / 34 |
+| JDK | 17 |
+| AGP | 8.13.2 |
 
-2. **Open in Android Studio**:
-   Open the project directory in Android Studio (Ladybug / 2024.2+ or Android Studio Jellyfish/Koala).
+No Honeywell dependency of any kind — the integration is a broadcast and a permission string.
 
-3. **Build via Gradle**:
-   ```bash
-   ./gradlew assembleDebug
-   ```
+---
 
-4. **Deploy to Device**:
-   Deploy to any Android device running Android 7.0+ or enterprise handheld mobile computers like the **Honeywell CK65** or **Zebra TC52**.
+## 🛠️ Building, running and testing
+
+```bash
+./gradlew assembleDebug          # build
+./gradlew installDebug           # install on a connected device
+./gradlew testDebugUnitTest      # unit tests
+./gradlew lintDebug              # lint
+```
+
+Tests are Robolectric-based and run against an in-memory Room database, so **no hardware is
+needed**:
+
+| Suite | Covers |
+| :--- | :--- |
+| `HoneywellScanReceiverTest` | DCS extra parsing, trimming, null handling, wrong-action and blank-payload rejection, ordered burst delivery |
+| `ScanSessionViewModelTest` | Scan classification, navigation, the pending queue and its merging rules, commit-to-database behaviour, name-only items |
+| `ContainerQuantityTest` | Empty containers, quantity summing, per-container isolation |
+
+### Simulating a scan without a scanner
+
+The app's receiver can be driven from `adb`, using the exact action, category and extras the
+DCS sends:
+
+```bash
+adb shell am broadcast \
+  -a com.example.scantron.action.BARCODE_SCAN \
+  -c android.intent.category.DEFAULT \
+  -p com.example.scantron \
+  --es data "BOX-101" \
+  --es codeId "C" \
+  --es aimId "]C1"
+```
+
+Watch the log:
+
+```bash
+adb logcat -s HoneywellScanReceiver
+```
+
+---
+
+## 🩺 Troubleshooting
+
+**Scanning does nothing; no dialog appears, no log output.**
+
+Work through these in order — the failure is silent by design.
+
+| Check | How |
+| :--- | :--- |
+| Data Intent enabled? | Settings path above. |
+| Action matches exactly? | Must equal `com.example.scantron.action.BARCODE_SCAN`. |
+| **Category matches?** | Must equal `android.intent.category.DEFAULT`. A mismatch drops the broadcast with no error. |
+| Package / Class left blank? | They must be empty — the app relies on an implicit broadcast. |
+| App in the foreground? | The receiver is unregistered in `onDestroy`. |
+| Permission declared? | Check `com.honeywell.decode.permission.DECODE` is in the manifest. |
+| Wedge double-input? | A scan arriving twice means the virtual wedge is also typing. Disable one path. |
+
+**A container will not open from its tag.** Confirm the tag matches a `containers.id` exactly —
+matching is case- and whitespace-insensitive, so `box-101` resolves to `BOX-101`, but a
+trailing character will not.
+
+**Scans are merging when they should not.** Two codes differing only by case or surrounding
+whitespace are treated as the same item by design, so that decoder-appended newlines do not
+create duplicates.
 
 ---
 
 ## 📄 License
+
 This project is licensed under the MIT License.

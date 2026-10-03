@@ -79,7 +79,8 @@ class LookupViewModel(
         }
     }
 
-    fun getItemCountFlow(containerId: String) = repository.getItemCount(containerId)
+    /** Total units held by a container, counting each item's quantity. */
+    fun getTotalQuantityFlow(containerId: String) = repository.getTotalQuantity(containerId)
 
     class Factory(private val repository: ContainerRepository) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")

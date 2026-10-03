@@ -14,8 +14,40 @@ interface ItemDao {
     @Query("SELECT * FROM container_items WHERE containerId = :containerId ORDER BY updatedAt DESC")
     fun getItemsForContainer(containerId: String): Flow<List<ContainerItem>>
 
+    @Query(
+        "SELECT * FROM container_items WHERE containerId = :containerId " +
+            "AND TRIM(barcode) = TRIM(:barcode) LIMIT 1",
+    )
+    suspend fun getItemByBarcode(containerId: String, barcode: String): ContainerItem?
+
+    /**
+     * Finds a name-only item (one with no barcode of its own) whose name matches [name],
+     * ignoring case and surrounding whitespace.
+     *
+     * Restricted to blank-barcode rows on purpose: when an item already carries a barcode that
+     * barcode is its identity, and matching it by name could silently merge two different
+     * things. Rows without a barcode have no other way to be recognised.
+     */
+    @Query(
+        "SELECT * FROM container_items WHERE containerId = :containerId " +
+            "AND TRIM(barcode) = '' " +
+            "AND LOWER(TRIM(name)) = LOWER(TRIM(:name)) LIMIT 1",
+    )
+    suspend fun getNameOnlyItemByName(containerId: String, name: String): ContainerItem?
+
     @Query("SELECT COUNT(*) FROM container_items WHERE containerId = :containerId")
     fun getItemCountForContainer(containerId: String): Flow<Int>
+
+    /**
+     * Total number of units in a container, summing each item's quantity rather than counting
+     * rows. `COALESCE` is required because `SUM` over no rows yields NULL, which does not map
+     * onto the non-null [Int] return type.
+     */
+    @Query(
+        "SELECT COALESCE(SUM(quantity), 0) FROM container_items " +
+            "WHERE containerId = :containerId",
+    )
+    fun getTotalQuantityForContainer(containerId: String): Flow<Int>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertItem(item: ContainerItem)
