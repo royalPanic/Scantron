@@ -18,6 +18,7 @@ captures/
 output-metadata.json
 *.dm
 baselineProfiles/
+*.artifact.md
 
 # IntelliJ
 *.iml
