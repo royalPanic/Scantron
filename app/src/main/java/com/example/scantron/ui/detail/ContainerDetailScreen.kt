@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.scantron.data.Container
 import com.example.scantron.data.ContainerItem
+import com.example.scantron.scanner.PendingScan
 import com.example.scantron.ui.components.EditContainerDialog
 import com.example.scantron.ui.components.EditItemDialog
 
@@ -28,6 +29,10 @@ import com.example.scantron.ui.components.EditItemDialog
 fun ContainerDetailScreen(
     viewModel: DetailViewModel,
     onNavigateBack: () -> Unit,
+    pendingScans: List<PendingScan> = emptyList(),
+    onCommitPendingScans: () -> Unit = {},
+    onDiscardPendingScan: (PendingScan) -> Unit = {},
+    onDiscardAllPendingScans: () -> Unit = {},
 ) {
     val container by viewModel.container.collectAsState()
     val items by viewModel.items.collectAsState()
@@ -44,7 +49,9 @@ fun ContainerDetailScreen(
     val dismissDeleteContainerDialog: () -> Unit = { showDeleteContainerDialog = false }
 
     val addNewItem: (ContainerItem) -> Unit = { newItem ->
-        viewModel.saveItem(newItem)
+        // Goes through the merging add path so re-adding an item raises its quantity
+        // instead of creating a second row for the same thing.
+        viewModel.addItem(newItem)
         showAddItemDialog = false
     }
     val applyItemEdit: (ContainerItem) -> Unit = { updatedItem ->
@@ -178,6 +185,14 @@ fun ContainerDetailScreen(
                 text = "Items Inside Container",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
+            )
+
+            // Hardware scans received for this container that are not yet persisted.
+            PendingScansCard(
+                pendingScans = pendingScans,
+                onCommitAll = onCommitPendingScans,
+                onDiscardAll = onDiscardAllPendingScans,
+                onDiscardOne = onDiscardPendingScan,
             )
 
             // Items List

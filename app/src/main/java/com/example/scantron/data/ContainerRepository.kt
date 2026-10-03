@@ -32,8 +32,15 @@ class ContainerRepository(
     fun getItemsForContainer(containerId: String): Flow<List<ContainerItem>> =
         itemDao.getItemsForContainer(containerId)
 
-    fun getItemCount(containerId: String): Flow<Int> =
-        itemDao.getItemCountForContainer(containerId)
+    /**
+     * Total units in a container, summing each item's quantity.
+     *
+     * Prefer this over the row count: a container holding one line of "Screws, qty 12" holds
+     * twelve screws, not one item. Distinct-row counts belong to the detail screen, which
+     * presents both figures.
+     */
+    fun getTotalQuantity(containerId: String): Flow<Int> =
+        itemDao.getTotalQuantityForContainer(containerId)
 
     suspend fun createOrUpdateContainer(container: Container) {
         containerDao.insertContainer(container)
@@ -49,6 +56,49 @@ class ContainerRepository(
         } else {
             itemDao.updateItem(item)
         }
+    }
+
+    /** Finds an existing item of [containerId] carrying [barcode], ignoring case and padding. */
+    suspend fun getItemByBarcode(containerId: String, barcode: String): ContainerItem? =
+        itemDao.getItemByBarcode(containerId, barcode)
+
+    /** Finds a barcode-less item of [containerId] named [name], ignoring case and padding. */
+    suspend fun getNameOnlyItemByName(containerId: String, name: String): ContainerItem? =
+        itemDao.getNameOnlyItemByName(containerId, name)
+
+    /**
+     * Adds [item] to its container, folding it into a row that already represents the same thing
+     * instead of creating a duplicate.
+     *
+     * Two matches are tried, in order:
+     *  1. an item already carrying the same barcode;
+     *  2. an item with **no barcode** whose name matches - this is what lets name-only items,
+     *     which have nothing scannable to identify them by, accumulate when the user types the
+     *     name again via the Add Item dialog.
+     *
+     * On a match the existing row's quantity is increased by [item]'s and the row is written
+     * back, so its id, name, category and notes survive. An item that already carries a barcode
+     * is deliberately never matched by name: that barcode is its identity, and merging two
+     * different barcodes into it would silently conflate them.
+     *
+     * Returns the row as it now stands.
+     */
+    suspend fun addItemMerging(item: ContainerItem): ContainerItem {
+        val existing = if (item.barcode.isNotBlank()) {
+            getItemByBarcode(item.containerId, item.barcode)
+        } else {
+            getNameOnlyItemByName(item.containerId, item.name)
+        } ?: run {
+            saveItem(item)
+            return item
+        }
+
+        val merged = existing.copy(
+            quantity = existing.quantity + item.quantity,
+            updatedAt = System.currentTimeMillis(),
+        )
+        saveItem(merged)
+        return merged
     }
 
     suspend fun deleteItem(item: ContainerItem) {
