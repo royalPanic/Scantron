@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -47,6 +48,8 @@ import com.example.scantron.ui.navigation.UriEncoder
 import com.example.scantron.ui.search.SearchScreen
 import com.example.scantron.ui.search.SearchViewModel
 import com.example.scantron.ui.theme.ScantronTheme
+import com.example.scantron.ui.transfer.TransferScreen
+import com.example.scantron.ui.transfer.TransferViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -208,8 +211,12 @@ fun ScantronApp() {
 
     Scaffold(
         bottomBar = {
-            if ((currentRoute == NavRoutes.Containers.route) || (currentRoute == NavRoutes.Search.route)) {
-                NavigationBar {
+                if (
+                    (currentRoute == NavRoutes.Containers.route) ||
+                    (currentRoute == NavRoutes.Search.route) ||
+                    (currentRoute == NavRoutes.Transfer.route)
+                ) {
+                    NavigationBar {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Inventory2, contentDescription = "Containers") },
                         label = { Text("Containers") },
@@ -238,7 +245,21 @@ fun ScantronApp() {
                             }
                         },
                     )
-                }
+                                        NavigationBarItem(
+                                            icon = { Icon(Icons.Default.SwapHoriz, contentDescription = "Transfer") },
+                                            label = { Text("Transfer") },
+                                            selected = currentRoute == NavRoutes.Transfer.route,
+                                            onClick = {
+                                                navController.navigate(NavRoutes.Transfer.route) {
+                                                    popUpTo(navController.graph.findStartDestination().id) {
+                                                        saveState = true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            },
+                                        )
+                                    }
             }
         },
     ) { innerPadding ->
@@ -284,6 +305,13 @@ fun ScantronApp() {
                     onNavigateToContainer = navigateToContainer,
                 )
             }
+
+                        composable(NavRoutes.Transfer.route) {
+                            val transferViewModel: TransferViewModel = viewModel(
+                                factory = TransferViewModel.Factory(context, repository),
+                            )
+                            TransferScreen(viewModel = transferViewModel)
+                        }
 
             composable(
                 route = NavRoutes.ContainerDetail.route,

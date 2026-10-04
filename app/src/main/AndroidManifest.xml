@@ -8,6 +8,29 @@
     -->
     <uses-permission android:name="com.honeywell.decode.permission.DECODE" />
 
+    <!--
+        LAN transfer to the desktop hub.
+
+        INTERNET / ACCESS_NETWORK_STATE / ACCESS_WIFI_STATE are normal permissions granted at
+        install time; they are the minimum needed to open a socket to a desktop on the shared
+        warehouse Wi-Fi.
+
+        CHANGE_WIFI_MULTICAST_STATE is what makes UDP discovery work at all. Android silently
+        drops multicast and broadcast traffic without it - the packets leave the socket and are
+        discarded by the Wi-Fi driver, which presents as "discovery finds nothing" with no error
+        anywhere. This is the single most common reason the Find desktops button does nothing.
+
+        ACCESS_FINE_LOCATION is a *runtime* permission and is only needed for discovery, because
+        Android 13+ will not deliver multicast lock or scan results without it. Manual-IP
+        transfer must keep working without it, so the UI requests it lazily when the operator
+        asks to search and falls back to typing the address when it is denied.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
     <uses-feature
         android:name="android.hardware.touchscreen"
         android:required="false" />

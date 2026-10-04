@@ -240,4 +240,109 @@ class ExportImportManagerTest {
 
         assertEquals(saved.uuid, repository.getItemsForContainerDirect("BOX-101").single().uuid)
     }
-}
+
+        // ---- String vs Uri parity ---------------------------------------------------------------
+        //
+        // The LAN transfer goes through the string half of this manager while USB goes through the
+        // Uri half. If the two ever disagree, a file moved over Wi-Fi and the same file moved on a
+        // USB stick stop being interchangeable - which is the entire premise of the feature. These
+        // tests hold the two paths to identical results for identical input.
+
+        @Test
+        fun `the string and Uri export paths produce identical results`() = runBlocking {
+            repository.createOrUpdateContainer(Container(id = "BOX-101", name = "Power Tools"))
+            repository.saveItem(ContainerItem(containerId = "BOX-101", name = "Drill", barcode = "AAA"))
+            repository.saveItem(ContainerItem(containerId = "BOX-101", name = "Screws", barcode = "BBB"))
+            repository.createOrUpdateContainer(Container(id = "EMPTY-1"))
+
+            val file = File.createTempFile("scantron_export", ".json")
+            file.delete()
+            val viaUri: ExportResult = manager.exportToJson(Uri.fromFile(file))
+            val viaString: ExportResult = run {
+                // exportToJsonString has no ExportResult of its own, so derive the same one the
+                // Uri path would report from the document it produced.
+                val json = manager.exportToJsonString()
+                val containers = JSONObject(json).getJSONArray("containers")
+                var items = 0
+                for (i in 0 until containers.length()) {
+                    items += containers.getJSONObject(i).optJSONArray("items")?.length() ?: 0
+                }
+                ExportResult(success = true, containerCount = containers.length(), itemCount = items)
+            }
+
+            assertEquals(viaUri, viaString)
+            assertEquals(2, viaString.containerCount)
+            assertEquals(2, viaString.itemCount)
+        }
+
+        @Test
+        fun `the string and Uri import paths produce identical results`() = runBlocking {
+            val document = document("1.1", containerJson("BOX-101", itemJson(uuid = "abc-123")))
+
+            val viaUri = importJson(document)
+
+            repository.clearAllData()
+            val viaString = manager.importFromJsonString(document)
+
+            assertEquals(viaUri, viaString)
+            assertTrue(viaString.success)
+            assertEquals(1, viaString.containerCount)
+            assertEquals(1, viaString.itemCount)
+        }
+
+        @Test
+        fun `a rejected document is rejected identically through the string path`() = runBlocking {
+            // The safety property under test: a document that fails validation must leave the
+            // database exactly as it was, whether it arrived on a USB stick or off the LAN.
+            importJson(document("1.1", containerJson("BOX-101", itemJson())))
+
+            val bad = document("1.1", containerJson("BOX-101", itemJson()), containerJson("BOX-101", itemJson()))
+            val viaUri = importJson(bad)
+
+            repository.clearAllData()
+            importJson(document("1.1", containerJson("BOX-101", itemJson())))
+            val viaString = manager.importFromJsonString(bad)
+
+            assertEquals(viaUri, viaString)
+            assertTrue(!viaString.success)
+            assertEquals(
+                "a rejected document must not clear the device",
+                1,
+                repository.getAllContainersDirect().size,
+            )
+        }
+
+        @Test
+        fun `the string export round trips through the string import`() = runBlocking {
+            repository.createOrUpdateContainer(Container(id = "BOX-101"))
+            val saved = repository.saveItem(ContainerItem(containerId = "BOX-101", name = "Drill", barcode = "AAA"))
+
+            val json = manager.exportToJsonString()
+            repository.clearAllData()
+            val result = manager.importFromJsonString(json)
+
+            assertTrue(result.success)
+            assertEquals(saved.uuid, repository.getItemsForContainerDirect("BOX-101").single().uuid)
+        }
+
+        @Test
+        fun `a malformed document over the string path changes nothing`() = runBlocking {
+            importJson(document("1.1", containerJson("BOX-101", itemJson())))
+
+            val result = manager.importFromJsonString("this is not json at all")
+
+            assertTrue(!result.success)
+            assertEquals(1, repository.getAllContainersDirect().size)
+        }
+
+        @Test
+        fun `an unsupported version over the string path changes nothing`() = runBlocking {
+            importJson(document("1.1", containerJson("BOX-101", itemJson())))
+
+            val result = manager.importFromJsonString(document("2.0", containerJson("BOX-9", itemJson())))
+
+            assertTrue(!result.success)
+            assertTrue(result.message.contains("Unsupported export version"))
+            assertEquals(1, repository.getAllContainersDirect().size)
+        }
+    }
