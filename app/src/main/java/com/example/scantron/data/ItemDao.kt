@@ -49,8 +49,12 @@ interface ItemDao {
     )
     fun getTotalQuantityForContainer(containerId: String): Flow<Int>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertItem(item: ContainerItem)
+    /** Reads a row's stored uuid, so an update can preserve an identity it was not given. */
+        @Query("SELECT uuid FROM container_items WHERE id = :itemId LIMIT 1")
+        suspend fun getUuidById(itemId: Long): String?
+
+        @Insert(onConflict = OnConflictStrategy.REPLACE)
+        suspend fun insertItem(item: ContainerItem)
 
     @Update
     suspend fun updateItem(item: ContainerItem)

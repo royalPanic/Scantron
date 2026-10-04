@@ -16,7 +16,7 @@ import androidx.room.PrimaryKey
             onUpdate = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("containerId"), Index("barcode")]
+    indices = [Index("containerId"), Index("barcode"), Index("uuid")]
 )
 data class ContainerItem(
     @PrimaryKey(autoGenerate = true)
@@ -27,5 +27,9 @@ data class ContainerItem(
     val quantity: Int = 1,
     val category: String = "",
     val notes: String = "",
+    // Stable identity for export/import round-trips. Appended last so existing positional
+    // call sites keep compiling; every construction site in this project uses named
+    // arguments anyway. Empty means "no identity yet" and is generated on insert.
+    val uuid: String = "",
     val updatedAt: Long = System.currentTimeMillis()
 )

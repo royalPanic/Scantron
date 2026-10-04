@@ -38,14 +38,20 @@ import java.util.Locale
  *           "quantity": 1,
  *           "category": "Tools",
  *           "notes": "Includes 2 lithium batteries",
- *           "updatedAt": 1705318200000
- *         }
- *       ]
- *     }
- *   ]
- * }
- * ```
- */
+  *          "uuid": "3f1c9e2a-8b47-4d16-9c05-7a2e6b1d4f83",
+  *          "updatedAt": 1705318200000
+  *        }
+  *      ]
+  *    }
+  *  ]
+  * }
+  * ```
+  *
+  * Version history:
+  *  - `1.0` - original shape, items have no identity field.
+  *  - `1.1` - adds the per-item `uuid`, a stable identity that survives export/import so a
+  *    desktop edit and a handheld edit can be matched to the same item. Both versions import.
+  */
 class ExportImportManager(
     private val context: Context,
     private val repository: ContainerRepository,
@@ -161,7 +167,8 @@ class ExportImportManager(
         .put(KEY_QUANTITY, item.quantity)
         .put(KEY_CATEGORY, item.category)
         .put(KEY_NOTES, item.notes)
-        .put(KEY_UPDATED_AT, item.updatedAt)
+                .put(KEY_UUID, item.uuid)
+                .put(KEY_UPDATED_AT, item.updatedAt)
 
     /**
      * Validates and decodes [json] without touching the database.
@@ -170,9 +177,11 @@ class ExportImportManager(
         val root = JSONObject(json)
 
         val version = root.optString(KEY_VERSION, SUPPORTED_VERSION)
-        if (version != SUPPORTED_VERSION) {
-            throw ImportException("Unsupported export version \"$version\" (expected $SUPPORTED_VERSION)")
-        }
+                if (version !in IMPORTABLE_VERSIONS) {
+                    throw ImportException(
+                        "Unsupported export version \"$version\" (expected one of ${IMPORTABLE_VERSIONS.joinToString()})",
+                    )
+                }
 
         val containersArray = root.optJSONArray(KEY_CONTAINERS)
             ?: throw ImportException("File is missing a \"$KEY_CONTAINERS\" array")
@@ -227,8 +236,12 @@ class ExportImportManager(
             quantity = obj.optInt(KEY_QUANTITY, 1),
             category = obj.optString(KEY_CATEGORY),
             notes = obj.optString(KEY_NOTES),
-            updatedAt = obj.optLong(KEY_UPDATED_AT, System.currentTimeMillis()),
-        )
+                        // A 1.0 file carries no uuid, and a 1.1 file may omit it. Either way the row is
+                        // imported without identity and repository.importAll() mints one on insert, so the
+                        // parser must not invent a value that could collide with the file's own.
+                        uuid = obj.optString(KEY_UUID).trim(),
+                        updatedAt = obj.optLong(KEY_UPDATED_AT, System.currentTimeMillis()),
+                    )
     }
 
     private fun writeJsonToUri(uri: Uri, json: String) {
@@ -256,7 +269,17 @@ class ExportImportManager(
         const val DEFAULT_FILENAME = "scantron_inventory.json"
         const val MIME_TYPE = "application/json"
 
-        private const val SUPPORTED_VERSION = "1.0"
+        /**
+         * Version stamped onto new exports. 1.1 adds the per-item `uuid` identity field.
+         */
+        const val SUPPORTED_VERSION = "1.1"
+
+        /**
+         * Every version this build can import. 1.0 files predate item identity; they remain
+         * importable and their items receive a fresh uuid during the import (see
+         * [parseItemJson]).
+         */
+        private val IMPORTABLE_VERSIONS = setOf("1.0", SUPPORTED_VERSION)
         private const val APP_ID = "Scantron"
         private const val EXPORT_TIMESTAMP_PATTERN = "yyyy-MM-dd'T'HH:mm:ss'Z'"
         private const val INDENT_SPACES = 2
@@ -273,7 +296,8 @@ class ExportImportManager(
         private const val KEY_BARCODE = "barcode"
         private const val KEY_QUANTITY = "quantity"
         private const val KEY_CATEGORY = "category"
-        private const val KEY_UPDATED_AT = "updatedAt"
+                private const val KEY_UUID = "uuid"
+                private const val KEY_UPDATED_AT = "updatedAt"
     }
 }
 

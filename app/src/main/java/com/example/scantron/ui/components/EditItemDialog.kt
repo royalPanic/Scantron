@@ -200,9 +200,13 @@ fun EditItemDialog(
                                         quantity = finalQty,
                                         category = category.trim(),
                                         notes = notes.trim(),
-                                        updatedAt = System.currentTimeMillis(),
-                                    ),
-                                )
+                                                                        // Carried over from the row being edited: dropping it
+                                                                        // would strip the item's identity and break the next
+                                                                        // export/import match against a desktop edit.
+                                                                        uuid = item?.uuid.orEmpty(),
+                                                                        updatedAt = System.currentTimeMillis(),
+                                                                    ),
+                                                                )
                             } else {
                                 nameError = true
                             }
@@ -226,8 +230,9 @@ fun EditItemDialog(
                             quantity = finalQty,
                             category = category.trim(),
                             notes = notes.trim(),
-                            updatedAt = System.currentTimeMillis(),
-                        )
+                                                    uuid = item?.uuid.orEmpty(),
+                                                    updatedAt = System.currentTimeMillis(),
+                                                )
                         onSave(updatedItem)
                     }
                 },
