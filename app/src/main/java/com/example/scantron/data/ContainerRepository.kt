@@ -82,15 +82,27 @@ class ContainerRepository(
          * the export/import match against edits made on a desktop. A caller that reaches the
          * update branch with a blank uuid is therefore falling back to the row's stored identity
          * rather than erasing it.
+         *
+         * @return the row as persisted, so the caller sees any uuid minted on the way in.
          */
-        suspend fun saveItem(item: ContainerItem) {
+        suspend fun saveItem(item: ContainerItem): ContainerItem {
             if (item.id == 0L) {
-                itemDao.insertItem(item.copy(uuid = item.uuid.ifBlank { UUID.randomUUID().toString() }))
-            } else if (item.uuid.isBlank()) {
-                itemDao.updateItem(item.copy(uuid = itemDao.getUuidById(item.id).orEmpty()))
-            } else {
-                itemDao.updateItem(item)
+                // Mint here rather than letting the caller guess, so the returned row is the row that
+                // actually landed. Returning the caller's copy would hand back a blank uuid for an item
+                // the database now tracks under a real one.
+                val stamped = item.copy(uuid = item.uuid.ifBlank { UUID.randomUUID().toString() })
+                itemDao.insertItem(stamped)
+                return stamped
             }
+
+            if (item.uuid.isBlank()) {
+                val preserved = item.copy(uuid = itemDao.getUuidById(item.id).orEmpty())
+                itemDao.updateItem(preserved)
+                return preserved
+            }
+
+            itemDao.updateItem(item)
+            return item
         }
 
     /** Finds an existing item of [containerId] carrying [barcode], ignoring case and padding. */
@@ -124,9 +136,10 @@ class ContainerRepository(
         } else {
             getNameOnlyItemByName(item.containerId, item.name)
         } ?: run {
-            saveItem(item)
-            return item
-        }
+                    // saveItem returns the row as persisted, including any uuid it minted, so the caller
+                    // never receives an identity the database did not actually store.
+                    return saveItem(item)
+                }
 
         val merged = existing.copy(
             quantity = existing.quantity + item.quantity,
