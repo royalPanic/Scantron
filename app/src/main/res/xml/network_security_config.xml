@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The desktop hub speaks the frozen wire contract documented in TransferClient: plain HTTP on
+    port 8756, one request at a time, no TLS option. From targetSdk 28 onward Android denies
+    cleartext by default, so without this file every transfer dies at the socket with
+    UnknownServiceException - an IOException, which the client reports as "Could not reach the
+    desktop". That message sends an operator off to check the Wi-Fi for a fault that is not on
+    the Wi-Fi at all.
+
+    Why this is a base-config rather than a scoped list of the private ranges:
+    <domain> takes hostnames and IP literals but does NOT understand CIDR notation, so
+    "192.168.0.0/16" silently never matches and a desktop at 192.168.50.55 is still blocked. The
+    operator types the desktop's address by hand and it can be anywhere on the warehouse network,
+    so there is no finite list of hosts to enumerate ahead of time.
+
+    The exposure is bounded and worth stating plainly: this app makes no other network calls, and
+    the hub traffic is plaintext only to a desktop on the operator's own LAN, carrying an
+    inventory document and no credentials.
+
+    If the hub ever gains HTTPS, delete this file and use the URL the desktop reports. TLS on the
+    desktop is the right fix; a wider exemption here is the expedient one.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

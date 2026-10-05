@@ -6,17 +6,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
+
 import androidx.compose.material.icons.filled.Lan
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -110,11 +112,17 @@ fun TransferScreen(
             )
         },
     ) { padding ->
+        // Scrollable because the content is taller than the usable height of a CK65 (480x800 at
+        // 213dpi, minus the top bar and the bottom navigation bar leaves roughly 570px). In a
+        // fixed Column the trailing children are measured with no height left and Compose drops
+        // them out of the layout entirely, which silently hides the status line and the whole
+        // Find desktops section - the two things an operator needs when a transfer goes wrong.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -190,9 +198,7 @@ fun TransferScreen(
 
             StatusLine(state)
 
-            Spacer(Modifier.weight(1f))
-
-                        DiscoverySection(
+            DiscoverySection(
                             peers = peers,
                             isSearching = isSearching,
                             guidance = discoveryUnavailable,

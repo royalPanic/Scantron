@@ -56,11 +56,20 @@ android {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
-        // collectAsStateWithLifecycle, so a screen in the background stops collecting instead of
-        // holding onto state while the operator is doing something else on the handheld.
-        implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
+
+    // Lifecycle must stay on 2.7.x while the Compose BOM below pins Compose to 1.6.x.
+    //
+    // Lifecycle 2.8.0 relocated LocalLifecycleOwner from androidx.compose.ui.platform to
+    // androidx.lifecycle.compose, and only Compose 1.7.0+ installs the new local. Against this
+    // BOM (Compose 1.6.7) collectAsStateWithLifecycle therefore reads a CompositionLocal that no
+    // host provides and throws "CompositionLocal LocalLifecycleOwner not present" the moment the
+    // Transfer screen composes. Raising lifecycle to 2.8.x instead requires moving the BOM to
+    // 2024.09.00+, which needs compileSdk 35 - a larger change than this bug warrants.
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    // collectAsStateWithLifecycle, so a screen in the background stops collecting instead of
+    // holding onto state while the operator is doing something else on the handheld.
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.7.0")
     implementation("androidx.activity:activity-compose:1.9.0")
 
     // Compose UI
