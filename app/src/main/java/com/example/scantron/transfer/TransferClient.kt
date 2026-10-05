@@ -125,11 +125,18 @@ class TransferClient(
                     TransferResult.Failure(message = "Desktop said: $reason", statusCode = status)
                 }
             } catch (e: SocketTimeoutException) {
+                Log.w(tag, "$method $path timed out against $endpoint", e)
                 TransferResult.Failure(
                                 "No answer from the desktop at $endpoint. Check the address, and that " +
                         "the desktop is on the same Wi-Fi and has sharing switched on.",
                 )
             } catch (e: IOException) {
+                // Logged, because this is the branch that swallowed a cleartext refusal whole: the
+                // platform throws here before any socket is opened, the desktop never sees the
+                // request, and the operator gets a message about the network for a problem that
+                // had nothing to do with it. Naming the cause here is what makes that class of
+                // failure findable at all.
+                Log.w(tag, "$method $path failed to reach $endpoint", e)
                 TransferResult.Failure(
                                 "Could not reach the desktop at $endpoint. Check the address, the network " +
                         "cable, and that the desktop has sharing switched on.",
