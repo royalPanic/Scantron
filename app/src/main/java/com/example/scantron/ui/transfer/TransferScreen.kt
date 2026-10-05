@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lan
@@ -110,14 +113,27 @@ fun TransferScreen(
             )
         },
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+            // Scrollable, and verticalScroll only.
+            //
+            // This screen has more content than a CK65 can show at once: the address field, three
+            // buttons, the status line and the whole discovery block. In a plain Column the overflow
+            // is laid out but never measured, so the children past the fold are silently dropped -
+            // "Get from desktop" and the "Find desktops" button simply do not exist as far as the
+            // operator (and the accessibility tree) are concerned. That is a far worse failure than
+            // a scrollbar: a pull-import is the destructive half of the feature and the one button
+            // an operator cannot find is the one they need when they are ready to replace the device's
+            // inventory.
+            //
+            // Spacing moves onto the children because verticalArrangement does not apply to the last
+            // gap of a scrollable Column, so relying on it alone leaves the bottom edge flush.
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(padding)
+                    .imePadding()
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
+            ) {
             OutlinedTextField(
                 value = address,
                 onValueChange = viewModel::onAddressChanged,
@@ -137,62 +153,78 @@ fun TransferScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
 
-            OutlinedButton(
-                onClick = viewModel::checkHealth,
-                enabled = !state.isBusy,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Default.Lan, contentDescription = null, modifier = Modifier.size(18.dp))
-                Text("  Check desktop")
-            }
+                            Spacer(Modifier.height(10.dp))
 
-            Text(
-                text = "This device",
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = "${DeviceInfo.deviceName()} on ${DeviceInfo.currentWifiName(context) ?: "Wi-Fi (name unavailable)"} - " +
-                    if (localAddresses.isEmpty()) {
-                        "no network address yet"
-                    } else {
-                        localAddresses.joinToString()
-                    },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.outline,
-            )
+                            OutlinedButton(
+                                onClick = viewModel::checkHealth,
+                                enabled = !state.isBusy,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Icon(Icons.Default.Lan, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Text("  Check desktop")
+                            }
 
-            HorizontalDivider()
+                            Spacer(Modifier.height(10.dp))
 
-                        Button(
-                                        onClick = viewModel::sendToDesktop,
-                                        enabled = !state.isBusy,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    ) {
-                                        Text("Send to desktop")
-                                    }
+                            Text(
+                                text = "This device",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                text = "${DeviceInfo.deviceName()} on ${DeviceInfo.currentWifiName(context) ?: "Wi-Fi (name unavailable)"} - " +
+                                    if (localAddresses.isEmpty()) {
+                                        "no network address yet"
+                                    } else {
+                                        localAddresses.joinToString()
+                                    },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                            )
 
-            Button(
-                onClick = viewModel::getFromDesktop,
-                enabled = !state.isBusy,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Get from desktop")
-            }
+                            Spacer(Modifier.height(10.dp))
 
-            if (state.isBusy) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text(
-                    text = (state as TransferState.Working).operation.label + "...",
-                    style = MaterialTheme.typography.labelMedium,
-                )
-            }
+                            HorizontalDivider()
 
-            StatusLine(state)
+                            Spacer(Modifier.height(10.dp))
 
-            Spacer(Modifier.weight(1f))
+                                        Button(
+                                                        onClick = viewModel::sendToDesktop,
+                                                        enabled = !state.isBusy,
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                    ) {
+                                                        Text("Send to desktop")
+                                                    }
 
-                        DiscoverySection(
+                            Spacer(Modifier.height(10.dp))
+
+                            Button(
+                                onClick = viewModel::getFromDesktop,
+                                enabled = !state.isBusy,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Get from desktop")
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+
+                            if (state.isBusy) {
+                                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                Text(
+                                    text = (state as TransferState.Working).operation.label + "...",
+                                    style = MaterialTheme.typography.labelMedium,
+                                )
+                            }
+
+                            StatusLine(state)
+
+                        // A fixed gap, not weight(1f): a weighted child measures against the *viewport*, not
+                        // the content, so inside a scrolling Column it collapses to nothing and - worse -
+                        // makes the scroll range wrong. A spacer keeps discovery from butting up against the
+                        // status line without disturbing the layout above it.
+                        Spacer(Modifier.height(10.dp))
+
+                                    DiscoverySection(
                             peers = peers,
                             isSearching = isSearching,
                             guidance = discoveryUnavailable,

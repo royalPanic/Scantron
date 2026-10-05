@@ -36,9 +36,22 @@
         android:required="false" />
 
 
+    <!--
+        usesCleartextTraffic: the desktop hub speaks plain HTTP on the local network, and this app
+        targets API 33, where cleartext is denied by default. Without it the platform refuses every
+        request before a socket is opened, so the hub never sees it and the transfer silently does
+        nothing - the button animates and no error is ever shown.
+
+        A blanket permission is the honest expression of what this app does: it talks to one
+        operator-chosen desktop on the LAN and to nothing else. A network security config cannot
+        narrow this usefully, because domain entries match literal hosts and cannot express a CIDR
+        range - so "192.168.0.0/16" would not match a desktop at 192.168.50.55, and the only way to
+        scope it would be to enumerate the single address the operator supplies at runtime.
+    -->
     <application
         android:name=".ScantronApplication"
         android:allowBackup="true"
+        android:usesCleartextTraffic="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"

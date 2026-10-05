@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -74,12 +76,26 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            ScantronTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
-                    ScantronApp()
+            // Supplied explicitly rather than left to the view tree.
+            //
+            // collectAsStateWithLifecycle resolves its Lifecycle through CompositionLocal, and
+            // that local is only populated when the host decor view carries a ViewTreeLifecycleOwner.
+            // Theme.Scantron derives from the *platform* Material theme rather than an AppCompat one,
+            // and on this handheld that decor view does not get the tag - so the first screen that
+            // calls collectAsStateWithLifecycle throws "CompositionLocal LocalLifecycleOwner not
+            // present" and takes the whole process down. The Transfer screen was the only one using
+            // it, which made the crash look like a transfer bug rather than a host bug.
+            //
+            // The activity is itself the LifecycleOwner, so naming it here is both correct and
+            // independent of which theme the device supplies.
+            CompositionLocalProvider(LocalLifecycleOwner provides this) {
+                ScantronTheme {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background,
+                    ) {
+                        ScantronApp()
+                    }
                 }
             }
         }
