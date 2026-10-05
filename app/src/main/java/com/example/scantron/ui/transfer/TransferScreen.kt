@@ -79,7 +79,9 @@ fun TransferScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val localAddresses by viewModel.localAddresses.collectAsStateWithLifecycle()
     val pullPreview by viewModel.pullPreview.collectAsStateWithLifecycle()
-        val peers by viewModel.peers.collectAsStateWithLifecycle()
+            val isListening by viewModel.isListening.collectAsStateWithLifecycle()
+            val listenProblem by viewModel.listenProblem.collectAsStateWithLifecycle()
+            val peers by viewModel.peers.collectAsStateWithLifecycle()
         val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
         val discoveryUnavailable by viewModel.discoveryUnavailable.collectAsStateWithLifecycle()
         val context = LocalContext.current
@@ -184,9 +186,53 @@ fun TransferScreen(
 
                             Spacer(Modifier.height(10.dp))
 
-                            HorizontalDivider()
+                                        // Receive from the desktop.
+                                        //
+                                        // The mirror of the two buttons above, and the reason the desktop's "Send to handheld"
+                                        // has somewhere to go. Sits immediately under this device's own addresses because that
+                                        // is where the operator reads the number the desktop needs - the two go together, and
+                                        // separating them is how an operator ends up typing one into the other field.
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            FilledTonalButton(
+                                                onClick = { if (isListening) viewModel.stopListening() else viewModel.startListening() },
+                                                // Not gated on listenProblem: a bind that failed because the port was busy is
+                                                // worth retrying once whatever was holding it has gone. The reason is on
+                                                // screen either way, so the operator is never left guessing.
+                                                enabled = !state.isBusy,
+                                                modifier = Modifier.weight(1f),
+                                            ) {
+                                                Text(if (isListening) "Stop listening" else "Receive from desktop")
+                                            }
+                                        }
 
-                            Spacer(Modifier.height(10.dp))
+                                        if (isListening) {
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = "Listening on port ${DEFAULT_LISTEN_PORT_TEXT}. On the desktop, type " +
+                                                    "${localAddresses.firstOrNull() ?: "this device's address above"} into " +
+                                                    "Handheld address and press Send to handheld.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
+
+                                        listenProblem?.let { problem ->
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = problem,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
+
+                                        Spacer(Modifier.height(10.dp))
+
+                                        HorizontalDivider()
+
+                                        Spacer(Modifier.height(10.dp))
 
                                         Button(
                                                         onClick = viewModel::sendToDesktop,
@@ -407,3 +453,6 @@ private fun relativeLastSeen(lastSeenMillis: Long): String {
 }
 
 private const val DEFAULT_PORT_TEXT = "8756"
+
+/** The port this device listens on for a desktop push. Fixed by the contract. */
+private const val DEFAULT_LISTEN_PORT_TEXT = "8758"

@@ -13,7 +13,8 @@
 
         INTERNET / ACCESS_NETWORK_STATE / ACCESS_WIFI_STATE are normal permissions granted at
         install time; they are the minimum needed to open a socket to a desktop on the shared
-        warehouse Wi-Fi.
+                warehouse Wi-Fi, and to listen for the desktop-initiated push on port 8758 (the Transfer
+                        screen's Receive from desktop button).
 
         CHANGE_WIFI_MULTICAST_STATE is what makes UDP discovery work at all. Android silently
         drops multicast and broadcast traffic without it - the packets leave the socket and are
