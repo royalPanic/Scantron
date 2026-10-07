@@ -198,6 +198,36 @@ implements this for **both** entry points — hardware scans and the *Add Item* 
 - **Export Inventory** and **Import Inventory** in the containers overflow menu, via the
   system document picker. `scantron_inventory.json`.
 
+### 📡 LAN transfer
+
+Inventory moves in **both** directions, because the person at the desk with a merged document is not
+always the person holding the scanner. Each side hosts the direction it is better suited to: this app
+connects to the desktop for the usual transfers, and listens for the one case where the desktop
+initiates.
+
+| Direction | Transport | What to do |
+| :--- | :--- | :--- |
+| This device → desktop | `POST :8756/push` | **Send to desktop** |
+| Desktop → this device | `GET :8756/pull` | **Get from desktop** — destructive, confirms first |
+| Desktop → this device | `POST :8758/receive` | **Receive from desktop**, then confirm |
+
+**Send to desktop** and **Get from desktop** use the desktop's hub on port 8756; type its address into
+the field at the top. **Find desktops** can fill it in for you where location access is granted.
+
+**Receive from desktop** is the reverse direction, for when someone at the desk presses *Send to
+handheld* and the scanner is somewhere on the same network. Press it and leave this screen open — the
+listener binds `0.0.0.0:8758` while it is on and **nothing is open otherwise**, because a listening
+socket on a shared warehouse network is a way for any device on it to push a document at this scanner.
+The port and this device's address are shown on screen for the operator to copy into the PC.
+
+A document arriving from the desktop is **staged and confirmed, never imported on arrival**. It shares
+the confirmation dialog with *Get from desktop*, because the consequence is identical: both clear and
+replace the whole database. Anything that cannot be read is refused with a plain-text reason the
+desktop shows to whoever sent it.
+
+Bodies on every route are the **raw export document** — no envelope, no base64 — so a document that
+arrived over Wi-Fi and the same document on a USB stick are interchangeable.
+
 ### 🏭 Handheld optimisations
 
 - Tuned for the CK65's 4.0″ WVGA (480 × 800) display and physical keypad.
@@ -238,6 +268,12 @@ app/src/main/java/com/example/scantron/
 │   ├── ItemDao.kt               Includes total-quantity and merge lookups
 │   ├── ContainerRepository.kt   addItemMerging() lives here
 │   └── ExportImportManager.kt   JSON import / export
+├── transfer/
+│   ├── TransferClient.kt        HTTP to the desktop hub (:8756)
+│   ├── TransferListener.kt      HTTP listener for a desktop push (:8758)
+│   ├── Discovery.kt             UDP broadcast to find desktops
+│   ├── Peer.kt                  Discovery reply value object
+│   └── DeviceInfo.kt            This device's own addresses, for display
 └── ui/
     ├── components/              EditContainerDialog, EditItemDialog,
     │                            OpenOrCreateContainerDialog
@@ -326,11 +362,19 @@ No Honeywell dependency of any kind — the integration is a broadcast and a per
 Tests are Robolectric-based and run against an in-memory Room database, so **no hardware is
 needed**:
 
+> **Run the tests on a JDK 17 or 21, not a JRE and not a bare JDK 25.** Robolectric 4.13 fails at
+> setup on a newer runtime with `ClassNotFoundException: couldn't load android.webkit.RoboCookieManager`
+> — and because the failure is in the harness rather than in any test, it reports as every test in the
+> suite failing at once. Point `JAVA_HOME` at a 17 or 21 JDK, e.g.
+> `JAVA_HOME=~/.jdks/jbr-21.0.11 ./gradlew testDebugUnitTest`.
+
 | Suite | Covers |
 | :--- | :--- |
 | `HoneywellScanReceiverTest` | DCS extra parsing, trimming, null handling, wrong-action and blank-payload rejection, ordered burst delivery |
 | `ScanSessionViewModelTest` | Scan classification, navigation, the pending queue and its merging rules, commit-to-database behaviour, name-only items |
 | `ContainerQuantityTest` | Empty containers, quantity summing, per-container isolation |
+| `TransferClientTest` | The desktop contract over a real socket: route, exact push bytes, plain-text refusals, refused connections |
+| `TransferListenerTest` | A desktop push arriving over a real socket: staged and counted, unreadable and empty bodies refused, wrong route, bind refusal, port release |
 
 ### Simulating a scan without a scanner
 
@@ -374,6 +418,17 @@ Work through these in order — the failure is silent by design.
 **A container will not open from its tag.** Confirm the tag matches a `containers.id` exactly —
 matching is case- and whitespace-insensitive, so `box-101` resolves to `BOX-101`, but a
 trailing character will not.
+
+**The desktop's "Send to handheld" cannot reach this scanner.**
+The socket only exists while **Receive from desktop** is showing "Listening" on this screen — it
+closes when the screen goes away, which is deliberate. Confirm both devices are on the same Wi-Fi,
+that the desktop has this device's address (shown under *This device*) rather than the desktop's own,
+and that port 8758 is not blocked between them. Watch `adb logcat -s TransferListener` for the bind
+result and each staged push.
+
+**"Could not listen on port 8758".**
+Another process already holds it — usually a second copy of this screen left open. Close it and press
+the button again; the bind is retried on every press rather than being latched as failed.
 
 **Scans are merging when they should not.** Two codes differing only by case or surrounding
 whitespace are treated as the same item by design, so that decoder-appended newlines do not

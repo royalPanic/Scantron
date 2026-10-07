@@ -36,3 +36,7 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Python (used by scripts bundled under .agents/skills)
+__pycache__/
+*.py[cod]

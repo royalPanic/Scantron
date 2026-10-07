@@ -7,6 +7,7 @@ sealed class NavRoutes(val route: String) {
     object Containers : NavRoutes("containers")
     object TagLookup : NavRoutes("tag_lookup")
     object Search : NavRoutes("search")
+    object Transfer : NavRoutes("transfer")
     object ContainerDetail : NavRoutes("container_detail/{containerId}") {
         fun createRoute(containerId: String) = "container_detail/${UriEncoder.encode(containerId)}"
     }

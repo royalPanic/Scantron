@@ -1,0 +1,60 @@
+{
+  "app": "Scantron",
+  "version": "1.1",
+  "exportedAt": "2026-10-04T04:22:23Z",
+  "containers": [
+    {
+      "id": "BOX-101",
+      "name": "Power Tools \u0026 Hardware",
+      "location": "Garage Shelf 2-A",
+      "notes": "Heavy plastic storage bin",
+      "updatedAt": 1791102143565,
+      "items": [
+        {
+          "name": "Cordless Drill 18V",
+          "uuid": "3f1c9e2a-8b47-4d16-9c05-7a2e6b1d4f83",
+          "barcode": "088381699921",
+          "quantity": 1,
+          "category": "Tools",
+          "notes": "Includes 2 lithium batteries",
+          "updatedAt": 1791102143565
+        },
+        {
+          "name": "Shared A",
+          "uuid": "collision-uuid",
+          "barcode": "AAA",
+          "quantity": 2,
+          "category": "",
+          "notes": "",
+          "updatedAt": 1791102143565
+        },
+        {
+          "name": "Shared B",
+          "uuid": "collision-uuid",
+          "barcode": "BBB",
+          "quantity": 3,
+          "category": "",
+          "notes": "",
+          "updatedAt": 1791102143565
+        },
+        {
+          "name": "Unlabelled spare",
+          "uuid": "",
+          "barcode": "",
+          "quantity": 4,
+          "category": "",
+          "notes": "",
+          "updatedAt": 1791102143565
+        }
+      ]
+    },
+    {
+      "id": "EMPTY-1",
+      "name": "Awaiting stock",
+      "location": "Loading dock",
+      "notes": "",
+      "updatedAt": 1791102143565,
+      "items": []
+    }
+  ]
+}
