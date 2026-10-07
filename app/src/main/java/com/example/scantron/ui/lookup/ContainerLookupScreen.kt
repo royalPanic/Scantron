@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -34,18 +33,14 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -59,8 +54,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.scantron.data.Container
 import com.example.scantron.ui.components.EditContainerDialog
+import com.example.scantron.ui.components.ScantronTopBar
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContainerLookupScreen(
     viewModel: LookupViewModel,
@@ -82,89 +77,82 @@ fun ContainerLookupScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Inventory2,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(end = 6.dp),
-                        )
-                        Text(
-                            text = "Containers",
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onNavigateToTagLookup) {
-                        Icon(
-                            imageVector = Icons.Default.QrCodeScanner,
-                            contentDescription = "Scan / Lookup Tag",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    IconButton(onClick = { showOverflowMenu = true }) {
-                        Icon(
-                            imageVector = Icons.Default.MoreVert,
-                            contentDescription = "More options",
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = showOverflowMenu,
-                        onDismissRequest = { showOverflowMenu = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("New Container", fontWeight = FontWeight.Bold) },
-                            onClick = {
-                                showOverflowMenu = false
-                                showCreateDialog = true
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Add, contentDescription = null)
-                            },
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("Import Inventory") },
-                            onClick = {
-                                showOverflowMenu = false
-                                onImportClick()
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.FolderOpen, contentDescription = null)
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Export Inventory") },
-                            onClick = {
-                                showOverflowMenu = false
-                                onExportClick()
-                            },
-                            leadingIcon = {
-                                Icon(Icons.Default.Save, contentDescription = null)
-                            },
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-            )
-        },
-        ) { padding ->
+    Column(modifier = Modifier.fillMaxSize()) {
+        ScantronTopBar(
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Inventory2,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(end = 6.dp),
+                    )
+                    Text(
+                        text = "Containers",
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            },
+            actions = {
+                IconButton(onClick = onNavigateToTagLookup) {
+                    Icon(
+                        imageVector = Icons.Default.QrCodeScanner,
+                        contentDescription = "Scan / Lookup Tag",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                IconButton(onClick = { showOverflowMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "More options",
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                DropdownMenu(
+                    expanded = showOverflowMenu,
+                    onDismissRequest = { showOverflowMenu = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("New Container", fontWeight = FontWeight.Bold) },
+                        onClick = {
+                            showOverflowMenu = false
+                            showCreateDialog = true
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                        },
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("Import Inventory") },
+                        onClick = {
+                            showOverflowMenu = false
+                            onImportClick()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.FolderOpen, contentDescription = null)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Export Inventory") },
+                        onClick = {
+                            showOverflowMenu = false
+                            onExportClick()
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Save, contentDescription = null)
+                        },
+                    )
+                }
+            },
+        )
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Card(
                 onClick = onNavigateToTagLookup,

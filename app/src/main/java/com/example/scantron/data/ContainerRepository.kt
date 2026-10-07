@@ -20,32 +20,32 @@ class ContainerRepository(
     }
 
     /**
-         * Replaces all rows in one go after an import.
-         *
-         * Every incoming item must carry a distinct uuid before it lands, because this path
-         * bypasses [saveItem]'s mint-on-insert. Items from a 1.0 file have none, so they are
-         * assigned here; items that arrive with a uuid keep theirs, which is what makes a
-         * desktop edit and a handheld edit resolve to the same row on the next sync.
-         *
-         * Duplicate uuids in a single document would make two rows claim one identity, so they
-         * are re-minted rather than trusted.
-         */
-        suspend fun importAll(containers: List<Container>, items: List<ContainerItem>) {
-            containerDao.insertAllContainers(containers)
-            itemDao.insertAllItems(assignMissingItemUuids(items))
-        }
+     * Replaces all rows in one go after an import.
+     *
+     * Every incoming item must carry a distinct uuid before it lands, because this path
+     * bypasses [saveItem]'s mint-on-insert. Items from a 1.0 file have none, so they are
+     * assigned here; items that arrive with a uuid keep theirs, which is what makes a
+     * desktop edit and a handheld edit resolve to the same row on the next sync.
+     *
+     * Duplicate uuids in a single document would make two rows claim one identity, so they
+     * are re-minted rather than trusted.
+     */
+    suspend fun importAll(containers: List<Container>, items: List<ContainerItem>) {
+        containerDao.insertAllContainers(containers)
+        itemDao.insertAllItems(assignMissingItemUuids(items))
+    }
 
-        private fun assignMissingItemUuids(items: List<ContainerItem>): List<ContainerItem> {
-            val seen = mutableSetOf<String>()
-            return items.map { item ->
-                val trimmed = item.uuid.trim()
-                if (trimmed.isNotEmpty() && seen.add(trimmed)) {
-                    item
-                } else {
-                    item.copy(uuid = UUID.randomUUID().toString())
-                }
+    private fun assignMissingItemUuids(items: List<ContainerItem>): List<ContainerItem> {
+        val seen = mutableSetOf<String>()
+        return items.map { item ->
+            val trimmed = item.uuid.trim()
+            if (trimmed.isNotEmpty() && seen.add(trimmed)) {
+                item
+            } else {
+                item.copy(uuid = UUID.randomUUID().toString())
             }
         }
+    }
 
     fun getContainer(containerId: String): Flow<Container?> =
         containerDao.getContainerByIdFlow(containerId)
@@ -75,35 +75,35 @@ class ContainerRepository(
     }
 
     /**
-         * Inserts a new item, or updates an existing one by row id.
-         *
-         * Identity is minted only for genuinely new rows. An update must never overwrite an
-         * existing row's uuid: doing so would silently change which item that row is, breaking
-         * the export/import match against edits made on a desktop. A caller that reaches the
-         * update branch with a blank uuid is therefore falling back to the row's stored identity
-         * rather than erasing it.
-         *
-         * @return the row as persisted, so the caller sees any uuid minted on the way in.
-         */
-        suspend fun saveItem(item: ContainerItem): ContainerItem {
-            if (item.id == 0L) {
-                // Mint here rather than letting the caller guess, so the returned row is the row that
-                // actually landed. Returning the caller's copy would hand back a blank uuid for an item
-                // the database now tracks under a real one.
-                val stamped = item.copy(uuid = item.uuid.ifBlank { UUID.randomUUID().toString() })
-                itemDao.insertItem(stamped)
-                return stamped
-            }
-
-            if (item.uuid.isBlank()) {
-                val preserved = item.copy(uuid = itemDao.getUuidById(item.id).orEmpty())
-                itemDao.updateItem(preserved)
-                return preserved
-            }
-
-            itemDao.updateItem(item)
-            return item
+     * Inserts a new item, or updates an existing one by row id.
+     *
+     * Identity is minted only for genuinely new rows. An update must never overwrite an
+     * existing row's uuid: doing so would silently change which item that row is, breaking
+     * the export/import match against edits made on a desktop. A caller that reaches the
+     * update branch with a blank uuid is therefore falling back to the row's stored identity
+     * rather than erasing it.
+     *
+     * @return the row as persisted, so the caller sees any uuid minted on the way in.
+     */
+    suspend fun saveItem(item: ContainerItem): ContainerItem {
+        if (item.id == 0L) {
+            // Mint here rather than letting the caller guess, so the returned row is the row that
+            // actually landed. Returning the caller's copy would hand back a blank uuid for an item
+            // the database now tracks under a real one.
+            val stamped = item.copy(uuid = item.uuid.ifBlank { UUID.randomUUID().toString() })
+            itemDao.insertItem(stamped)
+            return stamped
         }
+
+        if (item.uuid.isBlank()) {
+            val preserved = item.copy(uuid = itemDao.getUuidById(item.id).orEmpty())
+            itemDao.updateItem(preserved)
+            return preserved
+        }
+
+        itemDao.updateItem(item)
+        return item
+    }
 
     /** Finds an existing item of [containerId] carrying [barcode], ignoring case and padding. */
     suspend fun getItemByBarcode(containerId: String, barcode: String): ContainerItem? =
@@ -136,10 +136,10 @@ class ContainerRepository(
         } else {
             getNameOnlyItemByName(item.containerId, item.name)
         } ?: run {
-                    // saveItem returns the row as persisted, including any uuid it minted, so the caller
-                    // never receives an identity the database did not actually store.
-                    return saveItem(item)
-                }
+            // saveItem returns the row as persisted, including any uuid it minted, so the caller
+            // never receives an identity the database did not actually store.
+            return saveItem(item)
+        }
 
         val merged = existing.copy(
             quantity = existing.quantity + item.quantity,

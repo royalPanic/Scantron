@@ -62,117 +62,117 @@ class ExportImportManager(
     /**
      * Writes every container and its items to [outputUri].
      *
-         * Thin wrapper over [exportToJsonString] + a file write. The document is built by exactly
-         * the same code either way, so a file exported to a USB stick and the same bytes handed to
-         * the LAN transfer hub are the same document.
-         */
-        suspend fun exportToJson(outputUri: Uri): ExportResult = try {
-            val payload = collectExportPayload()
-            writeJsonToUri(outputUri, buildExportDocument(payload))
+     * Thin wrapper over [exportToJsonString] + a file write. The document is built by exactly
+     * the same code either way, so a file exported to a USB stick and the same bytes handed to
+     * the LAN transfer hub are the same document.
+     */
+    suspend fun exportToJson(outputUri: Uri): ExportResult = try {
+        val payload = collectExportPayload()
+        writeJsonToUri(outputUri, buildExportDocument(payload))
 
-            val (containerCount, itemCount) = countOf(payload)
-            Log.i(tag, "Exported $containerCount containers / $itemCount items to $outputUri")
-            ExportResult(success = true, containerCount = containerCount, itemCount = itemCount)
-        } catch (e: ImportException) {
-            Log.w(tag, "Export rejected: ${e.message}", e)
-            ExportResult(success = false, message = e.message ?: "Could not export inventory")
-        } catch (e: Exception) {
-            Log.e(tag, "Export failed", e)
-            ExportResult(
-                success = false,
-                message = "Could not export file: ${e.message ?: e::class.java.simpleName}",
+        val (containerCount, itemCount) = countOf(payload)
+        Log.i(tag, "Exported $containerCount containers / $itemCount items to $outputUri")
+        ExportResult(success = true, containerCount = containerCount, itemCount = itemCount)
+    } catch (e: ImportException) {
+        Log.w(tag, "Export rejected: ${e.message}", e)
+        ExportResult(success = false, message = e.message ?: "Could not export inventory")
+    } catch (e: Exception) {
+        Log.e(tag, "Export failed", e)
+        ExportResult(
+            success = false,
+            message = "Could not export file: ${e.message ?: e::class.java.simpleName}",
+        )
+    }
+
+    /**
+     * Replaces the current database contents with the contents of [inputUri].
+     *
+     * Thin wrapper over [importFromJsonString] + a file read. A file import and a document pulled
+     * off the LAN are the same code path from the first byte onwards.
+     */
+    suspend fun importFromJson(inputUri: Uri): ImportResult =
+        importFromJsonString(readJsonFromUri(inputUri), source = inputUri.toString())
+
+    /**
+     * Serializes the whole inventory to the document string, without an I/O target.
+     *
+     * This is what the LAN transfer pushes. The bytes are the unmodified Scantron export
+     * document - the same thing a USB file would contain - because both sides already have a
+     * parser and validator for it. Wrapping it in an envelope would mean two formats to keep in
+     * step and two new ways for the desktop and the handheld to disagree.
+     *
+     * @throws ImportException if the inventory cannot be assembled into a document.
+     */
+    suspend fun exportToJsonString(): String {
+        val payload = collectExportPayload()
+        Log.i(
+            tag,
+            "Built export document: ${payload.size} containers / ${payload.sumOf { it.items.size }} items",
+        )
+        return buildExportDocument(payload)
+    }
+
+    /**
+     * Replaces the current database contents with the contents of [json].
+     *
+     * This is what the LAN transfer feeds a `/pull` response into. Import is destructive: the
+     * database is cleared only after the document has been fully parsed and validated, so a
+     * corrupt, truncated, or hostile document leaves existing data untouched. That ordering is
+     * the whole safety story for pull-import and must not be relaxed - the desktop serving an
+     * empty or broken document would otherwise wipe a day of warehouse scanning.
+     */
+    suspend fun importFromJsonString(json: String, source: String = "transfer"): ImportResult = try {
+        val parsed = parseImportDocument(json)
+
+        repository.clearAllData()
+        repository.importAll(parsed.containers, parsed.items)
+
+        Log.i(
+            tag,
+            "Imported ${parsed.containers.size} containers / ${parsed.items.size} items from $source",
+        )
+        ImportResult(
+            success = true,
+            message = buildString {
+                append("Imported ${parsed.containers.size} containers")
+                if (parsed.items.isNotEmpty()) {
+                    append(" and ${parsed.items.size} items")
+                }
+            },
+            containerCount = parsed.containers.size,
+            itemCount = parsed.items.size,
+        )
+    } catch (e: ImportException) {
+        Log.w(tag, "Import rejected: ${e.message}", e)
+        ImportResult(success = false, message = e.message ?: "Could not import inventory")
+    } catch (e: JSONException) {
+        Log.w(tag, "Import rejected: malformed JSON", e)
+        ImportResult(success = false, message = "Document is not valid Scantron JSON")
+    } catch (e: Exception) {
+        Log.e(tag, "Import failed", e)
+        ImportResult(
+            success = false,
+            message = "Could not import inventory: ${e.message ?: e::class.java.simpleName}",
+        )
+    }
+
+    /**
+     * Snapshot of every container plus its items, read straight from the database.
+     *
+     * Read once per export so the document is internally consistent: pulling each container's
+     * items separately would interleave with concurrent scans and produce a document whose item
+     * counts disagree with the containers it was taken from.
+     */
+    private suspend fun collectExportPayload(): List<ExportContainer> =
+        repository.getAllContainersDirect().map { container ->
+            ExportContainer(
+                container = container,
+                items = repository.getItemsForContainerDirect(container.id),
             )
         }
 
-        /**
-         * Replaces the current database contents with the contents of [inputUri].
-         *
-         * Thin wrapper over [importFromJsonString] + a file read. A file import and a document pulled
-         * off the LAN are the same code path from the first byte onwards.
-         */
-        suspend fun importFromJson(inputUri: Uri): ImportResult =
-            importFromJsonString(readJsonFromUri(inputUri), source = inputUri.toString())
-
-        /**
-         * Serializes the whole inventory to the document string, without an I/O target.
-         *
-         * This is what the LAN transfer pushes. The bytes are the unmodified Scantron export
-         * document - the same thing a USB file would contain - because both sides already have a
-         * parser and validator for it. Wrapping it in an envelope would mean two formats to keep in
-         * step and two new ways for the desktop and the handheld to disagree.
-         *
-         * @throws ImportException if the inventory cannot be assembled into a document.
-         */
-        suspend fun exportToJsonString(): String {
-            val payload = collectExportPayload()
-            Log.i(
-                tag,
-                "Built export document: ${payload.size} containers / ${payload.sumOf { it.items.size }} items",
-            )
-            return buildExportDocument(payload)
-        }
-
-        /**
-         * Replaces the current database contents with the contents of [json].
-         *
-         * This is what the LAN transfer feeds a `/pull` response into. Import is destructive: the
-         * database is cleared only after the document has been fully parsed and validated, so a
-         * corrupt, truncated, or hostile document leaves existing data untouched. That ordering is
-         * the whole safety story for pull-import and must not be relaxed - the desktop serving an
-         * empty or broken document would otherwise wipe a day of warehouse scanning.
-         */
-        suspend fun importFromJsonString(json: String, source: String = "transfer"): ImportResult = try {
-            val parsed = parseImportDocument(json)
-
-            repository.clearAllData()
-            repository.importAll(parsed.containers, parsed.items)
-
-            Log.i(
-                tag,
-                "Imported ${parsed.containers.size} containers / ${parsed.items.size} items from $source",
-            )
-            ImportResult(
-                success = true,
-                message = buildString {
-                    append("Imported ${parsed.containers.size} containers")
-                    if (parsed.items.isNotEmpty()) {
-                        append(" and ${parsed.items.size} items")
-                    }
-                },
-                containerCount = parsed.containers.size,
-                itemCount = parsed.items.size,
-            )
-        } catch (e: ImportException) {
-            Log.w(tag, "Import rejected: ${e.message}", e)
-            ImportResult(success = false, message = e.message ?: "Could not import inventory")
-        } catch (e: JSONException) {
-            Log.w(tag, "Import rejected: malformed JSON", e)
-            ImportResult(success = false, message = "Document is not valid Scantron JSON")
-        } catch (e: Exception) {
-            Log.e(tag, "Import failed", e)
-            ImportResult(
-                success = false,
-                message = "Could not import inventory: ${e.message ?: e::class.java.simpleName}",
-            )
-        }
-
-        /**
-         * Snapshot of every container plus its items, read straight from the database.
-         *
-         * Read once per export so the document is internally consistent: pulling each container's
-         * items separately would interleave with concurrent scans and produce a document whose item
-         * counts disagree with the containers it was taken from.
-         */
-        private suspend fun collectExportPayload(): List<ExportContainer> =
-            repository.getAllContainersDirect().map { container ->
-                ExportContainer(
-                    container = container,
-                    items = repository.getItemsForContainerDirect(container.id),
-                )
-            }
-
-        private fun countOf(payload: List<ExportContainer>): Pair<Int, Int> =
-            payload.size to payload.sumOf { it.items.size }
+    private fun countOf(payload: List<ExportContainer>): Pair<Int, Int> =
+        payload.size to payload.sumOf { it.items.size }
 
     private fun buildExportDocument(payload: List<ExportContainer>): String {
         val root = JSONObject()
@@ -211,8 +211,8 @@ class ExportImportManager(
         .put(KEY_QUANTITY, item.quantity)
         .put(KEY_CATEGORY, item.category)
         .put(KEY_NOTES, item.notes)
-                .put(KEY_UUID, item.uuid)
-                .put(KEY_UPDATED_AT, item.updatedAt)
+        .put(KEY_UUID, item.uuid)
+        .put(KEY_UPDATED_AT, item.updatedAt)
 
     /**
      * Validates and decodes [json] without touching the database.
@@ -221,11 +221,11 @@ class ExportImportManager(
         val root = JSONObject(json)
 
         val version = root.optString(KEY_VERSION, SUPPORTED_VERSION)
-                if (version !in IMPORTABLE_VERSIONS) {
-                    throw ImportException(
-                        "Unsupported export version \"$version\" (expected one of ${IMPORTABLE_VERSIONS.joinToString()})",
-                    )
-                }
+        if (version !in IMPORTABLE_VERSIONS) {
+            throw ImportException(
+                "Unsupported export version \"$version\" (expected one of ${IMPORTABLE_VERSIONS.joinToString()})",
+            )
+        }
 
         val containersArray = root.optJSONArray(KEY_CONTAINERS)
             ?: throw ImportException("File is missing a \"$KEY_CONTAINERS\" array")
@@ -280,12 +280,12 @@ class ExportImportManager(
             quantity = obj.optInt(KEY_QUANTITY, 1),
             category = obj.optString(KEY_CATEGORY),
             notes = obj.optString(KEY_NOTES),
-                        // A 1.0 file carries no uuid, and a 1.1 file may omit it. Either way the row is
-                        // imported without identity and repository.importAll() mints one on insert, so the
-                        // parser must not invent a value that could collide with the file's own.
-                        uuid = obj.optString(KEY_UUID).trim(),
-                        updatedAt = obj.optLong(KEY_UPDATED_AT, System.currentTimeMillis()),
-                    )
+            // A 1.0 file carries no uuid, and a 1.1 file may omit it. Either way the row is
+            // imported without identity and repository.importAll() mints one on insert, so the
+            // parser must not invent a value that could collide with the file's own.
+            uuid = obj.optString(KEY_UUID).trim(),
+            updatedAt = obj.optLong(KEY_UPDATED_AT, System.currentTimeMillis()),
+        )
     }
 
     private fun writeJsonToUri(uri: Uri, json: String) {
@@ -340,8 +340,8 @@ class ExportImportManager(
         private const val KEY_BARCODE = "barcode"
         private const val KEY_QUANTITY = "quantity"
         private const val KEY_CATEGORY = "category"
-                private const val KEY_UUID = "uuid"
-                private const val KEY_UPDATED_AT = "updatedAt"
+        private const val KEY_UUID = "uuid"
+        private const val KEY_UPDATED_AT = "updatedAt"
     }
 }
 

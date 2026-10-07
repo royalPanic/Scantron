@@ -71,51 +71,51 @@ class TransferListener(
     /** True while the socket is bound and able to accept. Bound by [start], cleared by [stop]. */
     val isListening: Boolean get() = running.get()
 
-        /**
-         * The port actually bound, which differs from [DEFAULT_PORT] only when port 0 was asked for.
-         *
-         * Read from the socket rather than echoing the request back: the screen tells the operator
-         * which port to use, and a number that does not match what is listening is worse than no
-         * number at all. Tests rely on it for the same reason.
-         */
-        val boundPort: Int get() = socket?.localPort ?: port
+    /**
+     * The port actually bound, which differs from [DEFAULT_PORT] only when port 0 was asked for.
+     *
+     * Read from the socket rather than echoing the request back: the screen tells the operator
+     * which port to use, and a number that does not match what is listening is worse than no
+     * number at all. Tests rely on it for the same reason.
+     */
+    val boundPort: Int get() = socket?.localPort ?: port
 
     /**
-         * Binds the port and begins accepting, reporting a refusal through the return value rather
-         * than throwing.
+     * Binds the port and begins accepting, reporting a refusal through the return value rather
+     * than throwing.
      *
      * A refused bind is the likely failure - another copy of the screen is open, or the port is
      * taken by something else - and an operator staring at a button that silently does nothing has
-         * no way to diagnose it. The reason is returned, and also kept on [problem].
-         *
-         * Binding and serving happen together here, and the accept loop is already running by the time
-         * this returns. A caller that reported "listening" while the loop was still starting would be
-         * reporting something that might not yet be true.
-         */
-        fun start(): String? {
-            if (running.get()) return null
+     * no way to diagnose it. The reason is returned, and also kept on [problem].
+     *
+     * Binding and serving happen together here, and the accept loop is already running by the time
+     * this returns. A caller that reported "listening" while the loop was still starting would be
+     * reporting something that might not yet be true.
+     */
+    fun start(): String? {
+        if (running.get()) return null
 
-            val server = try {
-                ServerSocket(port, 0, InetAddress.getByName("0.0.0.0"))
-            } catch (e: IOException) {
-                Log.w(tag, "Could not bind port $port", e)
-                running.set(false)
-                val reason = "Could not listen on port $port: ${e.message ?: "the port is in use"}. " +
-                    "Another app may already be listening."
-                problem = reason
-                return reason
-            }
-
-            socket = server
-            running.set(true)
-            accepting = true
-            problem = null
-
-            Thread({ acceptLoop() }, "scantron-transfer-listener").apply { isDaemon = true }.start()
-
-            Log.i(tag, "Listening for a desktop push on port ${server.localPort}")
-            return null
+        val server = try {
+            ServerSocket(port, 0, InetAddress.getByName("0.0.0.0"))
+        } catch (e: IOException) {
+            Log.w(tag, "Could not bind port $port", e)
+            running.set(false)
+            val reason = "Could not listen on port $port: ${e.message ?: "the port is in use"}. " +
+                "Another app may already be listening."
+            problem = reason
+            return reason
         }
+
+        socket = server
+        running.set(true)
+        accepting = true
+        problem = null
+
+        Thread({ acceptLoop() }, "scantron-transfer-listener").apply { isDaemon = true }.start()
+
+        Log.i(tag, "Listening for a desktop push on port ${server.localPort}")
+        return null
+    }
 
     /** Why the listener is not listening, or null when it is. Shown to the operator. */
     @Volatile
@@ -133,69 +133,69 @@ class TransferListener(
      * this contract for the same reason.
      */
     private fun acceptLoop() {
-            val server = socket ?: return
+        val server = socket ?: return
 
-            while (accepting) {
-                val client = try {
-                    server.accept()
-                } catch (e: IOException) {
-                    // Expected on stop(): closing the server socket is what unblocks the accept, and
-                    // without this the loop would spin on a closed socket logging the same line.
-                    if (accepting) Log.w(tag, "Accept failed", e)
-                    break
-                }
+        while (accepting) {
+            val client = try {
+                server.accept()
+            } catch (e: IOException) {
+                // Expected on stop(): closing the server socket is what unblocks the accept, and
+                // without this the loop would spin on a closed socket logging the same line.
+                if (accepting) Log.w(tag, "Accept failed", e)
+                break
+            }
 
-                // One connection at a time, on this thread. A push replaces the device's inventory, so
-                // two overlapping would stage two documents for one operator to choose between - the
-                // hub on the desktop is sequential for the same reason.
-                try {
-                    handle(client)
-                } catch (e: IOException) {
-                    Log.w(tag, "A push connection failed", e)
-                } catch (e: Exception) {
-                    // Last-resort net. An exception escaping here would kill the accept loop and leave
-                    // the screen reporting "listening" for a socket nobody is serving - the exact
-                    // silent failure this path exists to prevent.
-                    Log.e(tag, "A push handler failed", e)
-                    runCatching { respond(client, 500, "This device could not accept the transfer.") }
-                }
+            // One connection at a time, on this thread. A push replaces the device's inventory, so
+            // two overlapping would stage two documents for one operator to choose between - the
+            // hub on the desktop is sequential for the same reason.
+            try {
+                handle(client)
+            } catch (e: IOException) {
+                Log.w(tag, "A push connection failed", e)
+            } catch (e: Exception) {
+                // Last-resort net. An exception escaping here would kill the accept loop and leave
+                // the screen reporting "listening" for a socket nobody is serving - the exact
+                // silent failure this path exists to prevent.
+                Log.e(tag, "A push handler failed", e)
+                runCatching { respond(client, 500, "This device could not accept the transfer.") }
             }
         }
+    }
 
     /**
-         * Writes a reply and leaves the connection to the caller, which owns the socket.
+     * Writes a reply and leaves the connection to the caller, which owns the socket.
      *
-         * Every response carries its Content-Length, because a client that trusts a missing one reads
-         * straight past the reply into whatever the socket says next - which on a keep-alive
-         * connection is the *next* response, and produces a transfer that reports the wrong counts.
-         *
-         * Content type is passed in rather than fixed because this endpoint answers in two
-         * languages: JSON for the acknowledgement, and plain text for every refusal. The desktop
-         * shows a refusal body to the operator verbatim, so those have to read as sentences.
-         */
-        private fun respond(
-            client: Socket,
-            status: Int,
-            body: String,
-            contentType: String = "text/plain; charset=utf-8",
-        ) {
-            runCatching {
-                val payload = body.toByteArray(Charsets.UTF_8)
-                client.getOutputStream().use { raw ->
-                    BufferedOutputStream(raw).use { out ->
-                        out.write(
-                            ("HTTP/1.1 $status ${statusText(status)}\r\n" +
-                                "Content-Type: $contentType\r\n" +
-                                "Content-Length: ${payload.size}\r\nConnection: close\r\n\r\n").toByteArray(
-                                Charsets.US_ASCII,
-                            ),
-                        )
-                        out.write(payload)
-                        out.flush()
-                    }
+     * Every response carries its Content-Length, because a client that trusts a missing one reads
+     * straight past the reply into whatever the socket says next - which on a keep-alive
+     * connection is the *next* response, and produces a transfer that reports the wrong counts.
+     *
+     * Content type is passed in rather than fixed because this endpoint answers in two
+     * languages: JSON for the acknowledgement, and plain text for every refusal. The desktop
+     * shows a refusal body to the operator verbatim, so those have to read as sentences.
+     */
+    private fun respond(
+        client: Socket,
+        status: Int,
+        body: String,
+        contentType: String = "text/plain; charset=utf-8",
+    ) {
+        runCatching {
+            val payload = body.toByteArray(Charsets.UTF_8)
+            client.getOutputStream().use { raw ->
+                BufferedOutputStream(raw).use { out ->
+                    out.write(
+                        ("HTTP/1.1 $status ${statusText(status)}\r\n" +
+                            "Content-Type: $contentType\r\n" +
+                            "Content-Length: ${payload.size}\r\nConnection: close\r\n\r\n").toByteArray(
+                            Charsets.US_ASCII,
+                        ),
+                    )
+                    out.write(payload)
+                    out.flush()
                 }
-            }.onFailure { Log.w(tag, "Could not answer a push on the socket", it) }
-        }
+            }
+        }.onFailure { Log.w(tag, "Could not answer a push on the socket", it) }
+    }
 
     private fun handle(client: Socket) {
         client.use { socket ->
@@ -249,8 +249,8 @@ class TransferListener(
                 socket,
                 200,
                 """{"ok":true,"containers":${counts.containerCount},"items":${counts.itemCount},"staged":true}""",
-                            contentType = "application/json",
-                        )
+                contentType = "application/json",
+            )
 
             onPushReceived?.invoke(
                 StagedPush(

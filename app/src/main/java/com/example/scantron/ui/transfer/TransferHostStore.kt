@@ -2,6 +2,7 @@ package com.example.scantron.ui.transfer
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 /**
  * Remembers the last desktop the operator successfully reached.
@@ -30,7 +31,7 @@ class TransferHostStore(context: Context) {
     fun remember(host: String) {
         val trimmed = host.trim()
         if (trimmed.isEmpty()) return
-        prefs.edit().putString(KEY_LAST_HOST, trimmed).apply()
+        prefs.edit { putString(KEY_LAST_HOST, trimmed) }
     }
 
     private companion object {

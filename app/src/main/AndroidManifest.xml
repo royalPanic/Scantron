@@ -29,6 +29,14 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!--
+        COARSE is requested alongside FINE, not instead of it. From Android 12 the location dialog
+        lets the operator pick precise or approximate, and the platform only offers that choice when
+        BOTH are declared - a request for FINE alone is rejected, which is why lint treats the missing
+        COARSE as an error. Discovery accepts whichever of the two the operator grants.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <uses-feature

@@ -59,7 +59,7 @@ class TransferClient(
      * `/pull` and `/push` both fail for the same reasons but report it far less clearly.
      */
     suspend fun health(): TransferResult =
-            request("GET", "/health", body = null)
+        request("GET", "/health", body = null)
 
     /**
      * `POST /push`. [json] is sent as UTF-8 bytes exactly as given - the caller must not
@@ -67,29 +67,29 @@ class TransferClient(
      * produces and the bytes are the contract.
      */
     suspend fun push(json: String): TransferResult =
-            request("POST", "/push", body = json)
+        request("POST", "/push", body = json)
 
     /**
      * `GET /pull`. On success the body is the desktop's export document; the caller is
      * responsible for feeding it to `importFromJsonString`, which is destructive.
      */
     suspend fun pull(): TransferResult =
-            request("GET", "/pull", body = null)
+        request("GET", "/pull", body = null)
 
     private suspend fun request(method: String, path: String, body: String?): TransferResult =
-            withContext(ioDispatcher) {
-                // Reached when the operator typed something with nothing usable in it. Reported
-                // plainly: this is a typo, not a network fault, and conflating the two would send
-                // someone off to check the Wi-Fi.
-                val target = host
-                    ?: return@withContext TransferResult.Failure(
-                        "That is not a desktop address. Type the IP the desktop is showing, " +
-                            "like 192.168.1.50",
-                    )
+        withContext(ioDispatcher) {
+            // Reached when the operator typed something with nothing usable in it. Reported
+            // plainly: this is a typo, not a network fault, and conflating the two would send
+            // someone off to check the Wi-Fi.
+            val target = host
+                ?: return@withContext TransferResult.Failure(
+                    "That is not a desktop address. Type the IP the desktop is showing, " +
+                        "like 192.168.1.50",
+                )
 
-                val url = URL("http", target, port, path)
+            val url = URL("http", target, port, path)
 
-                var connection: HttpURLConnection? = null
+            var connection: HttpURLConnection? = null
             try {
                 connection = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = method
@@ -127,7 +127,7 @@ class TransferClient(
             } catch (e: SocketTimeoutException) {
                 Log.w(tag, "$method $path timed out against $endpoint", e)
                 TransferResult.Failure(
-                                "No answer from the desktop at $endpoint. Check the address, and that " +
+                    "No answer from the desktop at $endpoint. Check the address, and that " +
                         "the desktop is on the same Wi-Fi and has sharing switched on.",
                 )
             } catch (e: IOException) {
@@ -138,7 +138,7 @@ class TransferClient(
                 // failure findable at all.
                 Log.w(tag, "$method $path failed to reach $endpoint", e)
                 TransferResult.Failure(
-                                "Could not reach the desktop at $endpoint. Check the address, the network " +
+                    "Could not reach the desktop at $endpoint. Check the address, the network " +
                         "cable, and that the desktop has sharing switched on.",
                 )
             } catch (e: Exception) {
@@ -181,38 +181,38 @@ class TransferClient(
         const val DEFAULT_PORT = 8756
         const val DEFAULT_TIMEOUT_MS = 10_000
 
-            /**
-             * Normalises an operator-typed address, or returns null if nothing usable is left.
-             *
-             * The desktop puts a complete `http://192.168.1.50:8756` on screen for the operator to
-             * read off, and the single most likely mistake is to type or scan that whole string into
-             * a field that wants only the IP. Stripping the scheme, a trailing path and a trailing
-             * colon turns the common mistake into a working transfer instead of an error the operator
-             * cannot diagnose. A bare host, an IP, or a hostname all pass through untouched.
-             *
-             * Order matters here: the scheme has to come off *before* the path is split, otherwise
-             * `http://host` truncates at the `//` and leaves the bare word `http`.
-             */
-            internal fun sanitizeHost(raw: String): String? =
-                raw.trim()
-                    .removePrefix("http://")
-                    .removePrefix("https://")
-                    .trim()
-                    .let { withoutScheme ->
-                        withoutScheme
-                            .substringBefore('/')
-                            .substringBefore('?')
-                            .substringBefore('#')
-                            .trim()
-                    }
-                    // The port is fixed by the wire contract and is supplied separately below, so a
-                    // port in the typed text is always redundant. Leaving it on would produce
-                    // "http://192.168.1.50:8756:8756" and a failure nobody could explain.
-                    .replace(TRAILING_PORT, "")
-                    .trim()
-                    .takeIf { it.isNotEmpty() && it.none { char -> char.isWhitespace() } }
+        /**
+         * Normalises an operator-typed address, or returns null if nothing usable is left.
+         *
+         * The desktop puts a complete `http://192.168.1.50:8756` on screen for the operator to
+         * read off, and the single most likely mistake is to type or scan that whole string into
+         * a field that wants only the IP. Stripping the scheme, a trailing path and a trailing
+         * colon turns the common mistake into a working transfer instead of an error the operator
+         * cannot diagnose. A bare host, an IP, or a hostname all pass through untouched.
+         *
+         * Order matters here: the scheme has to come off *before* the path is split, otherwise
+         * `http://host` truncates at the `//` and leaves the bare word `http`.
+         */
+        internal fun sanitizeHost(raw: String): String? =
+            raw.trim()
+                .removePrefix("http://")
+                .removePrefix("https://")
+                .trim()
+                .let { withoutScheme ->
+                    withoutScheme
+                        .substringBefore('/')
+                        .substringBefore('?')
+                        .substringBefore('#')
+                        .trim()
+                }
+                // The port is fixed by the wire contract and is supplied separately below, so a
+                // port in the typed text is always redundant. Leaving it on would produce
+                // "http://192.168.1.50:8756:8756" and a failure nobody could explain.
+                .replace(TRAILING_PORT, "")
+                .trim()
+                .takeIf { it.isNotEmpty() && it.none { char -> char.isWhitespace() } }
 
-                    /** A trailing `:<digits>` - the port the desktop happens to display, which we already know. */
-                    private val TRAILING_PORT = Regex(":\\d+$")
-        }
+        /** A trailing `:<digits>` - the port the desktop happens to display, which we already know. */
+        private val TRAILING_PORT = Regex(":\\d+$")
     }
+}

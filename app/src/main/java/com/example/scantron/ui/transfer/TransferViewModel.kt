@@ -69,103 +69,116 @@ class TransferViewModel(
     private val _localAddresses = MutableStateFlow<List<String>>(emptyList())
     val localAddresses: StateFlow<List<String>> = _localAddresses.asStateFlow()
 
-        // Discovery is optional by construction: it is only constructed once the operator has asked
-        // for it and granted location permission, so manual-IP transfer is never waiting on it.
-        private var discovery: Discovery? = null
+    // Discovery is optional by construction: it is only constructed once the operator has asked
+    // for it and granted location permission, so manual-IP transfer is never waiting on it.
+    private var discovery: Discovery? = null
 
-        private val _peers = MutableStateFlow<List<Peer>>(emptyList())
-        val peers: StateFlow<List<Peer>> = _peers.asStateFlow()
+    private val _peers = MutableStateFlow<List<Peer>>(emptyList())
+    val peers: StateFlow<List<Peer>> = _peers.asStateFlow()
 
-        private val _isSearching = MutableStateFlow(false)
-        val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
+    private val _isSearching = MutableStateFlow(false)
+    val isSearching: StateFlow<Boolean> = _isSearching.asStateFlow()
 
-        /**
-         * Why the Find desktops button is unavailable, phrased as guidance. Null when it is usable.
-         */
-        private val _discoveryUnavailable = MutableStateFlow<String?>(null)
-        val discoveryUnavailable: StateFlow<String?> = _discoveryUnavailable.asStateFlow()
+    /**
+     * Why the Find desktops button is unavailable, phrased as guidance. Null when it is usable.
+     */
+    private val _discoveryUnavailable = MutableStateFlow<String?>(null)
+    val discoveryUnavailable: StateFlow<String?> = _discoveryUnavailable.asStateFlow()
 
-        init {
-            refreshLocalAddresses()
-        }
+    init {
+        refreshLocalAddresses()
+    }
 
     fun onAddressChanged(newAddress: String) {
         address.value = newAddress
     }
 
-        /**
-         * True when the runtime prerequisites for discovery are satisfied.
-         *
-         * The caller checks this before showing the permission prompt, so the operator is never asked
-         * to grant a permission that would not help. From API 28 the platform will not deliver
-         * multicast or scan results without location permission; below that it is not required, and
-         * asking for it anyway would be a pointless prompt.
-         */
-        fun canUseDiscovery(): Boolean =
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.P ||
-                ContextCompat.checkSelfPermission(
-                    getApplication(),
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                ) == PackageManager.PERMISSION_GRANTED
+    /**
+     * True when the runtime prerequisites for discovery are satisfied.
+     *
+     * The caller checks this before showing the permission prompt, so the operator is never asked
+     * to grant a permission that would not help. From API 28 the platform will not deliver
+     * multicast or scan results without location permission; below that it is not required, and
+     * asking for it anyway would be a pointless prompt.
+     */
+    fun canUseDiscovery(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.P || hasLocationPermission()
 
-        /**
-         * Begins searching for desktops.
-         *
-         * Assumes [canUseDiscovery] has already been confirmed by the screen. Deliberately tolerant
-         * of failure: if the search cannot run, [discoveryUnavailable] explains why and the address
-         * field stays the supported way to transfer.
-         */
-        fun startDiscovery() {
-            if (!canUseDiscovery()) {
-                _discoveryUnavailable.value =
-                    "Searching needs location access on this Android version. Type the desktop " +
-                        "address above instead - it works exactly the same."
-                return
-            }
-
-            val active = discovery ?: Discovery(getApplication()).also { discovery = it }
-
-            // Mirror the discovery flows into state the screen can collect. Started once per
-            // Discovery instance; starting them again on every tap would double-count peers.
-            if (discoveryMirrorsStarted.compareAndSet(false, true)) {
-                viewModelScope.launch {
-                    active.peers.collect { _peers.value = it.pruneStale() }
-                }
-                viewModelScope.launch {
-                    active.isSearching.collect { _isSearching.value = it }
-                }
-                viewModelScope.launch {
-                    active.problem.collect { problem -> _discoveryUnavailable.value = problem }
-                }
-            }
-
-            _discoveryUnavailable.value = null
-            active.start(viewModelScope)
+    /**
+     * Whether either location grant is held.
+     *
+     * From Android 12 the platform can hand back precise (FINE) or approximate (COARSE) depending
+     * on what the operator chose, and the multicast lock discovery depends on is unlocked by
+     * holding either. Checking FINE alone would treat an approximate grant as a refusal and
+     * re-prompt forever.
+     */
+    private fun hasLocationPermission(): Boolean =
+        listOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        ).any { permission ->
+            ContextCompat.checkSelfPermission(getApplication(), permission) ==
+                PackageManager.PERMISSION_GRANTED
         }
 
-        fun stopDiscovery() {
-            discovery?.stop()
-            _isSearching.value = false
-        }
-
-        /**
-         * The operator declined the location prompt.
-         *
-         * Not an error state and not a nag: searching will not work, and everything else still does.
-         * The message says so plainly so the operator is never left wondering why the button appeared
-         * to do nothing.
-         */
-        fun onDiscoveryPermissionDenied() {
+    /**
+     * Begins searching for desktops.
+     *
+     * Assumes [canUseDiscovery] has already been confirmed by the screen. Deliberately tolerant
+     * of failure: if the search cannot run, [discoveryUnavailable] explains why and the address
+     * field stays the supported way to transfer.
+     */
+    fun startDiscovery() {
+        if (!canUseDiscovery()) {
             _discoveryUnavailable.value =
-                "Searching needs location access, which was declined. Type the desktop address " +
-                    "above instead - it works exactly the same."
+                "Searching needs location access on this Android version. Type the desktop " +
+                    "address above instead - it works exactly the same."
+            return
         }
 
-        /** Operator tapped a discovered desktop: fill the address field with it. */
-        fun onPeerSelected(peer: Peer) {
-            address.value = peer.host
-            stopDiscovery()
+        val active = discovery ?: Discovery(getApplication()).also { discovery = it }
+
+        // Mirror the discovery flows into state the screen can collect. Started once per
+        // Discovery instance; starting them again on every tap would double-count peers.
+        if (discoveryMirrorsStarted.compareAndSet(false, true)) {
+            viewModelScope.launch {
+                active.peers.collect { _peers.value = it.pruneStale() }
+            }
+            viewModelScope.launch {
+                active.isSearching.collect { _isSearching.value = it }
+            }
+            viewModelScope.launch {
+                active.problem.collect { problem -> _discoveryUnavailable.value = problem }
+            }
         }
+
+        _discoveryUnavailable.value = null
+        active.start(viewModelScope)
+    }
+
+    fun stopDiscovery() {
+        discovery?.stop()
+        _isSearching.value = false
+    }
+
+    /**
+     * The operator declined the location prompt.
+     *
+     * Not an error state and not a nag: searching will not work, and everything else still does.
+     * The message says so plainly so the operator is never left wondering why the button appeared
+     * to do nothing.
+     */
+    fun onDiscoveryPermissionDenied() {
+        _discoveryUnavailable.value =
+            "Searching needs location access, which was declined. Type the desktop address " +
+                "above instead - it works exactly the same."
+    }
+
+    /** Operator tapped a discovered desktop: fill the address field with it. */
+    fun onPeerSelected(peer: Peer) {
+        address.value = peer.host
+        stopDiscovery()
+    }
 
     /**
      * `GET /health`.
@@ -235,13 +248,13 @@ class TransferViewModel(
 
     /** Operator said yes: run the destructive import that [getFromDesktop] fetched. */
     fun confirmPull() {
-            // A pushed document occupies the same slot as a fetched one, so either is confirmed by
-            // the same path. Whichever it is, the import is the destructive step and it happens here
-            // and nowhere else.
-            val pending = pendingPull ?: pendingPush ?: return
-            pendingPull = null
-            pendingPush = null
-            _pullPreview.value = null
+        // A pushed document occupies the same slot as a fetched one, so either is confirmed by
+        // the same path. Whichever it is, the import is the destructive step and it happens here
+        // and nowhere else.
+        val pending = pendingPull ?: pendingPush ?: return
+        pendingPull = null
+        pendingPush = null
+        _pullPreview.value = null
         _state.value = TransferState.Working(TransferOperation.Pull)
 
         viewModelScope.launch {
@@ -257,7 +270,7 @@ class TransferViewModel(
                         "and ${result.itemCount} items from the desktop.",
                 )
             } else {
-                            TransferState.Failed(result.message)
+                TransferState.Failed(result.message)
             }
         }
     }
@@ -269,103 +282,103 @@ class TransferViewModel(
         _state.value = TransferState.Idle
     }
 
-        // ---- receiving a push from the desktop ------------------------------------------------------------
+    // ---- receiving a push from the desktop ------------------------------------------------------------
 
-        /** Whether this device is listening for a desktop push. Drives the on-screen toggle. */
-        private val _isListening = MutableStateFlow(false)
-        val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
+    /** Whether this device is listening for a desktop push. Drives the on-screen toggle. */
+    private val _isListening = MutableStateFlow(false)
+    val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
 
-        /** Why the listener could not bind, or null when it is listening. */
-        private val _listenProblem = MutableStateFlow<String?>(null)
-        val listenProblem: StateFlow<String?> = _listenProblem.asStateFlow()
+    /** Why the listener could not bind, or null when it is listening. */
+    private val _listenProblem = MutableStateFlow<String?>(null)
+    val listenProblem: StateFlow<String?> = _listenProblem.asStateFlow()
 
-        /**
-         * A push that arrived from the desktop, staged and waiting on confirmation.
-         *
-         * The same slot [getFromDesktop] fills, on purpose: both routes replace the database when
-         * confirmed, so both have to be confirmed the same way. Sharing one preview dialog also means
-         * the operator reads the same "Replace everything" wording whichever device sent the document.
-         */
-        private var pendingPush: PendingPull? = null
+    /**
+     * A push that arrived from the desktop, staged and waiting on confirmation.
+     *
+     * The same slot [getFromDesktop] fills, on purpose: both routes replace the database when
+     * confirmed, so both have to be confirmed the same way. Sharing one preview dialog also means
+     * the operator reads the same "Replace everything" wording whichever device sent the document.
+     */
+    private var pendingPush: PendingPull? = null
 
-        private val listener = TransferListener()
+    private val listener = TransferListener()
 
-        /**
-         * Opens a listening socket so the desktop's *Send to handheld* button has somewhere to go.
-         *
-         * [TransferListener.start] binds and begins accepting, so by the time this returns the socket
-         * is genuinely live - which is what makes the confirmation message honest. A refused bind
-         * comes back as a string instead of being thrown, because the likely cause is another copy of
-         * the screen being open and an operator needs to be told that rather than shown a crash.
-         */
-        fun startListening() {
-            if (_isListening.value) return
+    /**
+     * Opens a listening socket so the desktop's *Send to handheld* button has somewhere to go.
+     *
+     * [TransferListener.start] binds and begins accepting, so by the time this returns the socket
+     * is genuinely live - which is what makes the confirmation message honest. A refused bind
+     * comes back as a string instead of being thrown, because the likely cause is another copy of
+     * the screen being open and an operator needs to be told that rather than shown a crash.
+     */
+    fun startListening() {
+        if (_isListening.value) return
 
-            val failure = listener.start()
-            if (failure != null) {
-                _listenProblem.value = failure
-                _state.value = TransferState.Failed(failure)
-                return
-            }
+        val failure = listener.start()
+        if (failure != null) {
+            _listenProblem.value = failure
+            _state.value = TransferState.Failed(failure)
+            return
+        }
 
-            _listenProblem.value = null
-            _isListening.value = true
+        _listenProblem.value = null
+        _isListening.value = true
 
-            // Set after a successful bind: a listener with no callback would accept a document and
-            // silently drop it, which is the exact failure this whole path exists to prevent.
-            listener.onPushReceived = ::onPushStaged
+        // Set after a successful bind: a listener with no callback would accept a document and
+        // silently drop it, which is the exact failure this whole path exists to prevent.
+        listener.onPushReceived = ::onPushStaged
 
+        _state.value = TransferState.Success(
+            "Listening on port ${listener.boundPort}. Leave this screen open and use " +
+                "Send to handheld on the desktop.",
+        )
+    }
+
+    /** Closes the listening socket. Safe to call when not listening. */
+    fun stopListening() {
+        listener.stop()
+        _isListening.value = false
+        _state.value = TransferState.Idle
+    }
+
+    /**
+     * Stages a document the desktop pushed, and asks before touching the database.
+     *
+     * Runs on the listener's IO thread, so the state write crosses to the main one. Not imported
+     * here under any circumstances: the confirmation is what makes an inbound push as safe as a
+     * pull, and a push that imported on arrival would be a way for anything on the warehouse
+     * network to replace a day's scanning with one unauthenticated request.
+     */
+    private fun onPushStaged(push: StagedPush) {
+        viewModelScope.launch {
+            val preview = PullPreview(push.containerCount, push.itemCount)
+            pendingPush = PendingPull(push.document, preview)
+            _pullPreview.value = preview
             _state.value = TransferState.Success(
-                "Listening on port ${listener.boundPort}. Leave this screen open and use " +
-                    "Send to handheld on the desktop.",
+                "The desktop sent ${preview.containerCount} containers and ${preview.itemCount} " +
+                    "items. Nothing has been changed yet - confirm below to replace this device's data.",
             )
         }
+    }
 
-        /** Closes the listening socket. Safe to call when not listening. */
-        fun stopListening() {
-            listener.stop()
-            _isListening.value = false
-            _state.value = TransferState.Idle
-        }
+    /**
+     * Confirms a *pushed* document, importing it once the operator has seen the counts.
+     *
+     * Shares [PendingPull] with [confirmPull] deliberately: the consequence is identical, so the
+     * confirmation has to look and behave identically whichever side sent the document.
+     */
+    fun confirmPush() = confirmPull()
 
-        /**
-         * Stages a document the desktop pushed, and asks before touching the database.
-         *
-         * Runs on the listener's IO thread, so the state write crosses to the main one. Not imported
-         * here under any circumstances: the confirmation is what makes an inbound push as safe as a
-         * pull, and a push that imported on arrival would be a way for anything on the warehouse
-         * network to replace a day's scanning with one unauthenticated request.
-         */
-        private fun onPushStaged(push: StagedPush) {
-            viewModelScope.launch {
-                val preview = PullPreview(push.containerCount, push.itemCount)
-                pendingPush = PendingPull(push.document, preview)
-                _pullPreview.value = preview
-                _state.value = TransferState.Success(
-                    "The desktop sent ${preview.containerCount} containers and ${preview.itemCount} " +
-                        "items. Nothing has been changed yet - confirm below to replace this device's data.",
-                )
-            }
-        }
+    /** Operator declined a pushed document: drop it and leave the database alone. */
+    fun cancelPush() {
+        pendingPush = null
+        _pullPreview.value = null
+        _state.value = TransferState.Idle
+    }
 
-        /**
-         * Confirms a *pushed* document, importing it once the operator has seen the counts.
-         *
-         * Shares [PendingPull] with [confirmPull] deliberately: the consequence is identical, so the
-         * confirmation has to look and behave identically whichever side sent the document.
-         */
-        fun confirmPush() = confirmPull()
-
-        /** Operator declined a pushed document: drop it and leave the database alone. */
-        fun cancelPush() {
-            pendingPush = null
-            _pullPreview.value = null
-            _state.value = TransferState.Idle
-        }
-
-        fun clearStatus() {
-            if (_state.value !is TransferState.Working) _state.value = TransferState.Idle
-        }
+    fun clearStatus() {
+        if (_state.value !is TransferState.Working) _state.value = TransferState.Idle
+    }
 
     fun refreshLocalAddresses() {
         viewModelScope.launch {
@@ -422,15 +435,15 @@ class TransferViewModel(
     private val discoveryMirrorsStarted = AtomicBoolean(false)
 
     override fun onCleared() {
-            // Close the listening socket with the ViewModel, alongside releasing the multicast lock.
-            // A socket that outlives the screen is a listener nothing can reach, and on a device that
-            // keeps the ViewModel around it is a standing way to push at this scanner.
-            listener.stop()
-            // Release the socket and the multicast lock with the ViewModel, not whenever the screen
-            // happens to be recomposed: a held multicast lock is charged to the app's battery budget.
-            discovery?.stop()
-            super.onCleared()
-        }
+        // Close the listening socket with the ViewModel, alongside releasing the multicast lock.
+        // A socket that outlives the screen is a listener nothing can reach, and on a device that
+        // keeps the ViewModel around it is a standing way to push at this scanner.
+        listener.stop()
+        // Release the socket and the multicast lock with the ViewModel, not whenever the screen
+        // happens to be recomposed: a held multicast lock is charged to the app's battery budget.
+        discovery?.stop()
+        super.onCleared()
+    }
 
     class Factory(
         private val application: Application,
@@ -455,7 +468,7 @@ data class PullPreview(val containerCount: Int, val itemCount: Int) {
 
     companion object {
         fun from(json: String): PullPreview? = runCatching {
-                    val root = JSONObject(json)
+            val root = JSONObject(json)
             val containers = root.optJSONArray("containers") ?: return null
             var itemCount = 0
             for (i in 0 until containers.length()) {
