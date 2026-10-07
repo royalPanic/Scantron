@@ -74,6 +74,7 @@ object DeviceInfo {
      * discovery is unavailable. Returning null lets the UI say nothing rather than print
      * `<unknown ssid>` as though it were the network name.
      */
+    @Suppress("InlinedApi") // WifiManager.UNKNOWN_SSID is a compile-time String constant, inlined safely below API 30.
     fun currentWifiName(context: Context): String? = runCatching {
         val wifiManager = context.applicationContext
             .getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return null

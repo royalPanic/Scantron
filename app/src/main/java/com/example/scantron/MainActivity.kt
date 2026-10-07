@@ -165,7 +165,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScantronApp() {
     val navController = rememberNavController()

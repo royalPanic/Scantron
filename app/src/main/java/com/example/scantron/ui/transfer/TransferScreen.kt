@@ -82,9 +82,11 @@ fun TransferScreen(
         // when the operator actually asks to search - rather than on screen entry. If it is refused
         // the address field above remains fully functional, which is the point.
         val locationPermissionLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.RequestPermission(),
-        ) { granted ->
-            if (granted) {
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+        ) { grants ->
+            // FINE and COARSE are requested together (see the manifest). Either grant is enough to
+            // unlock discovery, so only a refusal of both is treated as a refusal.
+            if (grants.values.any { it }) {
                 viewModel.startDiscovery()
             } else {
                 viewModel.onDiscoveryPermissionDenied()
@@ -194,7 +196,12 @@ fun TransferScreen(
                                 if (viewModel.canUseDiscovery()) {
                                     viewModel.startDiscovery()
                                 } else {
-                                    locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                                        ),
+                                    )
                                 }
                             },
                             onPeerSelected = viewModel::onPeerSelected,
