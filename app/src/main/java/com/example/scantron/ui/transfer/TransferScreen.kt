@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -27,7 +26,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,12 +33,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.scantron.transfer.DeviceInfo
 import com.example.scantron.transfer.Peer
 import com.example.scantron.transfer.TransferState
+import com.example.scantron.ui.components.ScantronTopBar
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -68,7 +64,6 @@ import java.util.Locale
  * control on the screen and is pre-filled with the last desktop that answered - see
  * [TransferHostStore] for why that has to survive process death.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TransferScreen(
     viewModel: TransferViewModel,
@@ -96,22 +91,16 @@ fun TransferScreen(
             }
         }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        "Transfer to Desktop",
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-            )
-        },
-    ) { padding ->
+    Column(modifier = Modifier.fillMaxSize()) {
+        ScantronTopBar(
+            title = {
+                Text(
+                    "Transfer to Desktop",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            },
+        )
         // Scrollable because the content is taller than the usable height of a CK65 (480x800 at
         // 213dpi, minus the top bar and the bottom navigation bar leaves roughly 570px). In a
         // fixed Column the trailing children are measured with no height left and Compose drops
@@ -119,12 +108,11 @@ fun TransferScreen(
         // Find desktops section - the two things an operator needs when a transfer goes wrong.
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding()
+                .weight(1f)
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             OutlinedTextField(
                 value = address,

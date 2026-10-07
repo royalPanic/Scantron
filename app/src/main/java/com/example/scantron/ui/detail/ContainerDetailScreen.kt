@@ -23,8 +23,8 @@ import com.example.scantron.data.ContainerItem
 import com.example.scantron.scanner.PendingScan
 import com.example.scantron.ui.components.EditContainerDialog
 import com.example.scantron.ui.components.EditItemDialog
+import com.example.scantron.ui.components.ScantronTopBar
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContainerDetailScreen(
     viewModel: DetailViewModel,
@@ -63,9 +63,9 @@ fun ContainerDetailScreen(
         showEditContainerDialog = false
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            ScantronTopBar(
                 title = {
                     Column {
                         Text(
@@ -99,27 +99,14 @@ fun ContainerDetailScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
             )
-        },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { showAddItemDialog = true },
-                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Add Item") },
-            )
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
             // Container Header Info Card
             Card(
                 colors = CardDefaults.cardColors(
@@ -227,6 +214,9 @@ fun ContainerDetailScreen(
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
+                    // Lets the last item scroll clear of the floating "Add Item" button, which now
+                    // overlays the list from inside this Box rather than being placed by a Scaffold.
+                    contentPadding = PaddingValues(bottom = 72.dp),
                 ) {
                     items(items, key = { it.id }) { item ->
                         val updateQuantity: (Int) -> Unit = { newQty ->
@@ -241,7 +231,17 @@ fun ContainerDetailScreen(
                     }
                 }
             }
+            }
         }
+
+        ExtendedFloatingActionButton(
+            onClick = { showAddItemDialog = true },
+            icon = { Icon(Icons.Default.Add, contentDescription = null) },
+            text = { Text("Add Item") },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp),
+        )
     }
 
     // Dialogs

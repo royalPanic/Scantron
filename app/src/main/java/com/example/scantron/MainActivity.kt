@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -27,8 +28,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavType
@@ -40,6 +44,8 @@ import com.example.scantron.scanner.HoneywellScanReceiver
 import com.example.scantron.scanner.ScanBus
 import com.example.scantron.scanner.ScanSessionViewModel
 import com.example.scantron.ui.components.OpenOrCreateContainerDialog
+import com.example.scantron.ui.components.ScantronNavItem
+import com.example.scantron.ui.components.ScantronNavigationBar
 import com.example.scantron.ui.detail.ContainerDetailScreen
 import com.example.scantron.ui.detail.DetailViewModel
 import com.example.scantron.ui.lookup.ContainerLookupScreen
@@ -55,6 +61,16 @@ import com.example.scantron.ui.transfer.TransferViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+/**
+ * The destinations shown in the bottom bar, in order. A plain top-level list rather than one built
+ * inside the composable, so it is allocated once and its identity never depends on recomposition.
+ */
+private val ScantronNavItems = listOf(
+    ScantronNavItem(NavRoutes.Containers.route, Icons.Default.Inventory2, "Containers"),
+    ScantronNavItem(NavRoutes.Search.route, Icons.Default.Search, "Search Items"),
+    ScantronNavItem(NavRoutes.Transfer.route, Icons.Default.SwapHoriz, "Transfer"),
+)
+
 class MainActivity : ComponentActivity() {
 
     // Created in onCreate and torn down in onDestroy. A fresh instance is used for each
@@ -64,6 +80,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        hideSystemNavigationBar()
 
         // Listen for Honeywell Data Intent broadcasts from the CK65 Data Collection Service.
         // RECEIVER_EXPORTED is required because the broadcast originates in another process;
@@ -99,6 +116,42 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Hides the system navigation bar so the whole 480x800 panel belongs to the app, and brings it
+     * back only as a transient overlay when the operator swipes up from the bottom edge.
+     *
+     * [WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE] is the "sticky" immersive
+     * behaviour: the bar stays hidden, a swipe from the bottom reveals it semi-transparently over the
+     * content, and it hides itself again once the gesture ends. Only the *navigation* bar is hidden -
+     * the status bar is left alone.
+     *
+     * Hiding it also collapses the navigation-bar inset to zero, so the compact bottom bar drops from
+     * 52dp + 48dp of reserved strip to just its 52dp, returning that strip to the content.
+     *
+     * This only has an effect under three-button navigation. Under gesture navigation the system owns
+     * the gesture pill and an app cannot hide it, so there the call is a no-op rather than an error.
+     */
+    private fun hideSystemNavigationBar() {
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.navigationBars())
+        }
+    }
+
+    /**
+     * Re-applies the immersive navigation bar whenever the window regains focus.
+     *
+     * The platform brings the bars back on its own in several situations an app cannot intercept:
+     * returning from another app, dismissing a system dialog, and the soft keyboard closing. Doing it
+     * here is what stops the bar from coming back and then staying back - without this the hide is a
+     * one-shot that the first keyboard dismissal undoes for the rest of the session.
+     */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemNavigationBar()
     }
 
     override fun onDestroy() {
@@ -227,55 +280,24 @@ fun ScantronApp() {
 
     Scaffold(
         bottomBar = {
-                if (
-                    (currentRoute == NavRoutes.Containers.route) ||
-                    (currentRoute == NavRoutes.Search.route) ||
-                    (currentRoute == NavRoutes.Transfer.route)
-                ) {
-                    NavigationBar {
-                    NavigationBarItem(
-                        icon = { Icon(Icons.Default.Inventory2, contentDescription = "Containers") },
-                        label = { Text("Containers") },
-                        selected = currentRoute == NavRoutes.Containers.route,
-                        onClick = {
-                            navController.navigate(NavRoutes.Containers.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
+            if (
+                currentRoute == NavRoutes.Containers.route ||
+                currentRoute == NavRoutes.Search.route ||
+                currentRoute == NavRoutes.Transfer.route
+            ) {
+                ScantronNavigationBar(
+                    items = ScantronNavItems,
+                    currentRoute = currentRoute,
+                    onSelect = { route ->
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
                             }
-                        },
-                    )
-                    NavigationBarItem(
-                        icon = { Icon(Icons.Default.Search, contentDescription = "Search Items") },
-                        label = { Text("Search Items") },
-                        selected = currentRoute == NavRoutes.Search.route,
-                        onClick = {
-                            navController.navigate(NavRoutes.Search.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                    )
-                                        NavigationBarItem(
-                                            icon = { Icon(Icons.Default.SwapHoriz, contentDescription = "Transfer") },
-                                            label = { Text("Transfer") },
-                                            selected = currentRoute == NavRoutes.Transfer.route,
-                                            onClick = {
-                                                navController.navigate(NavRoutes.Transfer.route) {
-                                                    popUpTo(navController.graph.findStartDestination().id) {
-                                                        saveState = true
-                                                    }
-                                                    launchSingleTop = true
-                                                    restoreState = true
-                                                }
-                                            },
-                                        )
-                                    }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
             }
         },
     ) { innerPadding ->
@@ -284,6 +306,11 @@ fun ScantronApp() {
             startDestination = NavRoutes.Containers.route,
             modifier = Modifier
                 .padding(innerPadding)
+                // The host Scaffold is now the single owner of the window insets. Consume the
+                // padding it handed down so nothing inside the graph re-applies the status-bar or
+                // navigation-bar insets; the screens wrap their compact top bars in a plain Column
+                // that applies none, and this keeps it that way if a screen ever reaches for one.
+                .consumeWindowInsets(innerPadding)
                 .imePadding(),
         ) {
             composable(NavRoutes.Containers.route) {

@@ -21,8 +21,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.example.scantron.data.ItemWithContainer
+import com.example.scantron.ui.components.ScantronTopBar
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel,
@@ -31,25 +31,22 @@ fun SearchScreen(
     val query by viewModel.searchQuery.collectAsState()
     val results by viewModel.searchResults.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text("Search All Contents", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-            )
-        }
-    ) { padding ->
+    Column(modifier = Modifier.fillMaxSize()) {
+        ScantronTopBar(
+            title = {
+                Text(
+                    "Search All Contents",
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            },
+        )
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .imePadding()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // Search Input (Honeywell CK65 Hardware Barcode Scanner Intercept)
             OutlinedTextField(
