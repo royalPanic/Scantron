@@ -5,7 +5,6 @@ import android.net.wifi.WifiManager
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -41,7 +40,14 @@ import java.net.NetworkInterface
  * [WifiManager.MulticastLock] and declares `CHANGE_WIFI_MULTICAST_STATE`, and it does so without
  * any error.
  */
-class Discovery(private val context: Context) {
+class Discovery(
+    private val context: Context,
+    /**
+     * Where the probe is sent. Production leaves this null and uses the directed broadcast of every
+     * usable interface; tests inject a loopback target because a test host has no real subnet.
+     */
+    private val probeTargets: (() -> List<InetAddress>)? = null,
+) {
 
     private val _peers = MutableStateFlow<List<Peer>>(emptyList())
     val peers: StateFlow<List<Peer>> = _peers.asStateFlow()
@@ -79,7 +85,13 @@ class Discovery(private val context: Context) {
             // A blocked receive would otherwise hold the port open indefinitely if the ViewModel
             // were cleared mid-window.
             val socket = runCatching {
-                DatagramSocket().apply { soTimeout = RECEIVE_POLL_TIMEOUT_MS }
+                DatagramSocket().apply {
+                    // Required to send to a broadcast address at all. Without SO_BROADCAST the
+                    // kernel rejects the send with EACCES and the probe never leaves the device -
+                    // silently, which is exactly how this feature previously failed to work.
+                    broadcast = true
+                    soTimeout = RECEIVE_POLL_TIMEOUT_MS
+                }
             }.getOrElse { failure ->
                 Log.w(TAG, "Could not open a discovery socket", failure)
                 _isSearching.value = false
@@ -93,7 +105,13 @@ class Discovery(private val context: Context) {
             val packet = DatagramPacket(buffer, buffer.size)
 
             while (isActive) {
-                broadcastProbe(socket, probe)
+                // Every send can fail - and did, before SO_BROADCAST was set. Saying so beats
+                // leaving the screen on "No desktops found yet" while the probe never went out.
+                if (broadcastProbe(socket, probe) == 0) {
+                    reportProblem("Could not broadcast on this network. Type the desktop address instead.")
+                } else {
+                    _problem.value = null
+                }
 
                 // A few reads per window rather than a tight drain loop: each desktop replies
                 // within milliseconds of the broadcast, so more than this just burns battery
@@ -142,25 +160,26 @@ class Discovery(private val context: Context) {
     }
 
     /**
-     * Sends `WHO_HAS` to the broadcast address of every up, non-loopback IPv4 interface.
+     * Sends `WHO_HAS` to every probe target, returning how many sends the socket accepted.
      *
      * The directed broadcast of the device's own subnet is used rather than the global
      * `255.255.255.255`, because routers drop the latter and many warehouse APs do too.
      */
-    private suspend fun broadcastProbe(socket: DatagramSocket, probe: ByteArray) =
+    private suspend fun broadcastProbe(socket: DatagramSocket, probe: ByteArray): Int =
         withContext(Dispatchers.IO) {
-            val targets = broadcastAddresses()
+            val targets = probeTargets?.invoke() ?: broadcastAddresses()
             if (targets.isEmpty()) {
                 Log.d(TAG, "No usable interface for a discovery broadcast")
-                return@withContext
+                return@withContext 0
             }
 
-            targets.forEach { address ->
+            targets.count { address ->
                 runCatching {
                     socket.send(
                         DatagramPacket(probe, probe.size, address, PORT),
                     )
                 }.onFailure { Log.w(TAG, "Discovery broadcast to $address failed", it) }
+                    .isSuccess
             }
         }
 
@@ -242,10 +261,15 @@ class Discovery(private val context: Context) {
     private fun acquireMulticastLock() {
         val wifiManager = context.applicationContext
             .getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
-        multicastLock = wifiManager.createMulticastLock(MULTICAST_LOCK_TAG).apply {
-            setReferenceCounted(false)
-            acquire()
-        }
+        // A lock that cannot be acquired must not stop the search: the probe may still get out,
+        // and an exception here would kill the loop before it ever sends a packet.
+        multicastLock = runCatching {
+            wifiManager.createMulticastLock(MULTICAST_LOCK_TAG).apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }.onFailure { Log.w(TAG, "Could not acquire the multicast lock", it) }
+            .getOrNull()
     }
 
     /**
@@ -254,6 +278,9 @@ class Discovery(private val context: Context) {
      * thrown: discovery is a convenience and must never be the reason a transfer cannot happen.
      */
     private fun reportProblem(message: String) {
+        // Deduplicated: this is called once per probe window, so neither the log nor the state
+        // should churn while the same condition persists.
+        if (_problem.value == message) return
         Log.i(TAG, message)
         _problem.value = message
     }

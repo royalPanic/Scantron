@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 
@@ -267,7 +265,7 @@ private fun StatusLine(state: TransferState) {
 }
 
 @Composable
-private fun DiscoverySection(
+internal fun DiscoverySection(
     peers: List<Peer>,
     isSearching: Boolean,
     guidance: String?,
@@ -313,11 +311,11 @@ private fun DiscoverySection(
         }
 
         if (peers.isNotEmpty()) {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                items(peers, key = { "${it.host}:${it.port}" }) { peer ->
+            // A plain Column, not a LazyColumn: this sits inside the screen's own verticalScroll,
+            // and a lazy list measured with unbounded height throws. A warehouse has a handful of
+            // desktops, so there is nothing worth virtualising anyway.
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                peers.forEach { peer ->
                     PeerCard(peer = peer, onClick = { onPeerSelected(peer) })
                 }
             }
