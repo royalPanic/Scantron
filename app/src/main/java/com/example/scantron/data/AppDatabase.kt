@@ -9,13 +9,14 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import java.util.UUID
 
 @Database(
-    entities = [Container::class, ContainerItem::class],
-    version = 3,
+    entities = [Container::class, ContainerItem::class, PendingDeletion::class],
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun containerDao(): ContainerDao
     abstract fun itemDao(): ItemDao
+    abstract fun deletionDao(): DeletionDao
 
     companion object {
         @Volatile
@@ -62,6 +63,35 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the `pending_deletions` tombstone log.
+         *
+         * A tombstone is what lets a deletion survive long enough to reach a peer that was offline
+         * when it happened. The table's primary key is (kind, id) rather than a synthetic row id so
+         * recording the same deletion twice replaces instead of duplicating - see
+         * [com.example.scantron.data.PendingDeletion].
+         *
+         * Declared in SQL that matches Room's own generated schema exactly (`NOT NULL` on every
+         * column, composite primary key), because a mismatch here is only discovered at runtime as
+         * an integrity check failure on the next open.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pending_deletions` (" +
+                        "`kind` TEXT NOT NULL, " +
+                        "`id` TEXT NOT NULL, " +
+                        "`containerId` TEXT NOT NULL, " +
+                        "`deletedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`kind`, `id`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_pending_deletions_deletedAt` " +
+                        "ON `pending_deletions` (`deletedAt`)",
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -69,7 +99,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "scantron_inventory_db"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

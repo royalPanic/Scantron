@@ -7,6 +7,7 @@ import java.util.UUID
 class ContainerRepository(
     private val containerDao: ContainerDao,
     private val itemDao: ItemDao,
+    private val deletionDao: DeletionDao? = null,
 ) {
     val allContainers: Flow<List<Container>> = containerDao.getAllContainers()
 
@@ -70,8 +71,20 @@ class ContainerRepository(
         containerDao.insertContainer(container)
     }
 
+    /**
+     * Deletes a container and every row inside it.
+     *
+     * A tombstone is recorded alongside the delete, keyed on the container tag. The rows go with it
+     * and get no tombstones of their own, mirroring the wire contract's `deleteContainer`: a peer
+     * applying it removes the container and all its rows, so per-row records would be noise.
+     */
     suspend fun deleteContainer(container: Container) {
         containerDao.deleteContainer(container)
+        recordDeletion(
+            kind = PendingDeletionKind.CONTAINER,
+            id = container.id,
+            containerId = container.id,
+        )
     }
 
     /**
@@ -149,8 +162,36 @@ class ContainerRepository(
         return merged
     }
 
+    /**
+     * Deletes one row and records a tombstone for it.
+     *
+     * The tombstone is keyed on the row's uuid, because that is the identity a `deleteItem` op
+     * carries. A row that has no uuid yet (it was created and deleted before any export) gets no
+     * tombstone: there is no identity a peer could have agreed on for it, so there is nothing to
+     * tell the peer about.
+     */
     suspend fun deleteItem(item: ContainerItem) {
         itemDao.deleteItem(item)
+        val uuid = item.uuid.trim()
+        if (uuid.isEmpty()) return
+        recordDeletion(
+            kind = PendingDeletionKind.ITEM,
+            id = uuid,
+            containerId = item.containerId,
+        )
+    }
+
+    /** Records a tombstone, or does nothing when this repository was built without a deletion DAO. */
+    private suspend fun recordDeletion(kind: String, id: String, containerId: String) {
+        val dao = deletionDao ?: return
+        dao.record(
+            PendingDeletion(
+                kind = kind,
+                id = id.trim(),
+                containerId = containerId.trim(),
+                deletedAt = System.currentTimeMillis(),
+            ),
+        )
     }
 
     fun searchItems(query: String): Flow<List<ItemWithContainer>> {
@@ -161,8 +202,111 @@ class ContainerRepository(
         }
     }
 
-    suspend fun seedSampleDataIfEmpty() {
-        // Pre-populate demo containers if none exist
+    // ---- live sync ------------------------------------------------------------------------------
+
+    /**
+     * The whole inventory as one value, read once so it is internally consistent.
+     *
+     * Reading each container's rows separately would interleave with concurrent scans and produce a
+     * document whose row counts disagree with the containers it was taken from - and this value is
+     * the reference the diff compares against.
+     */
+    suspend fun snapshotDocument(): InventoryDocument = InventoryDocument(
+        containers = containerDao.getAllContainersDirect(),
+        items = itemDao.getAllItemsDirect(),
+    )
+
+    /**
+     * Applies a merged document to the database as a delta rather than a replace.
+     *
+     * [importAll] would work, but it clears and rewrites every row, which is both a much larger write
+     * and - crucially - a moment where a scan landing mid-apply would be lost. Applying only the rows
+     * that actually differ keeps the window tiny and keeps unrelated row ids stable, which matters
+     * because a row id that changes underneath an open detail screen is a crash waiting to happen.
+     *
+     * [document] is authoritative: it is the merged view of what this device should now hold, so a row
+     * or container it does not mention is *removed*. That is not the same as "absent means deleted" on
+     * the wire - the merge has already decided, and this is just the write. Anything the merge wanted
+     * to keep is in the document; anything it did not is gone on purpose.
+     */
+    suspend fun applyDocumentDelta(document: InventoryDocument) {
+        val wantedContainerIds = document.containers.map { it.id.trim() }.toSet()
+        val existingContainers = containerDao.getAllContainersDirect()
+
+        // Deletions before insertions: a container's rows are removed by foreign-key cascade, so
+        // clearing first means a re-added container starts from the merged row set rather than from
+        // whatever the cascade left behind.
+        existingContainers
+            .filterNot { it.id.trim() in wantedContainerIds }
+            .forEach { containerDao.deleteContainer(it) }
+
+        document.containers.forEach { container ->
+            val existing = existingContainers.firstOrNull { it.id.trim() == container.id.trim() }
+            if (existing == null || existing != container) {
+                containerDao.insertContainer(container)
+            }
+        }
+
+        val existingRows = itemDao.getAllItemsDirect()
+        val wantedRowIds = mutableSetOf<Long>()
+
+        document.items.forEach { row ->
+            val key = itemKeyOf(row.containerId, row)
+            val existing = existingRows.firstOrNull { itemKeyOf(it.containerId, it) == key }
+
+            if (existing == null) {
+                // A new row. The id is left at 0 so Room mints one rather than the merged row carrying
+                // an id from whichever device produced it.
+                itemDao.insertItem(row.copy(id = 0))
+            } else {
+                wantedRowIds += existing.id
+                if (!sameRowContent(existing, row)) {
+                    itemDao.updateItem(row.copy(id = existing.id))
+                }
+            }
+        }
+
+        existingRows
+            .filterNot { it.id in wantedRowIds }
+            .forEach { itemDao.deleteItem(it) }
+    }
+
+    /** True when two rows are the same content, ignoring the device-local row id. */
+    private fun sameRowContent(left: ContainerItem, right: ContainerItem): Boolean =
+        left.containerId == right.containerId &&
+            left.uuid == right.uuid &&
+            left.name == right.name &&
+            left.barcode == right.barcode &&
+            left.quantity == right.quantity &&
+            left.category == right.category &&
+            left.notes == right.notes &&
+            left.updatedAt == right.updatedAt
+
+    /** The tombstone log, oldest first. Empty when this repository was built without a DAO. */
+    fun observeDeletions(): Flow<List<PendingDeletion>> =
+        deletionDao?.observeAll() ?: kotlinx.coroutines.flow.flowOf(emptyList())
+
+    suspend fun allDeletions(): List<PendingDeletion> = deletionDao?.getAll().orEmpty()
+
+    suspend fun findDeletion(kind: String, id: String): PendingDeletion? =
+        deletionDao?.find(kind, id)
+
+    /** Drops a tombstone once a peer has acknowledged the deletion. */
+    suspend fun forgetDeletion(kind: String, id: String) {
+        deletionDao?.delete(kind, id)
+    }
+
+    /**
+     * Drops tombstones older than [cutoffMillis].
+     *
+     * The horizon exists because an unbounded log is a slow disk failure, and because a peer that
+     * has been away longer than the horizon is sent a full snapshot instead - a snapshot states what
+     * the document *is*, so it carries the deletions implicitly and needs no tombstones at all.
+     */
+    suspend fun pruneDeletions(cutoffMillis: Long): Int =
+        deletionDao?.pruneOlderThan(cutoffMillis) ?: 0
+
+    suspend fun seedSampleDataIfEmpty() {        // Pre-populate demo containers if none exist
         val existing = containerDao.getContainerById("BOX-101")
         if (existing == null) {
             val c1 = Container("BOX-101", "Power Tools & Hardware", "Garage Shelf 2-A", "Heavy plastic storage bin")

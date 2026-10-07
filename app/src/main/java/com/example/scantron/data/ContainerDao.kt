@@ -13,6 +13,10 @@ interface ContainerDao {
     @Query("SELECT * FROM containers ORDER BY updatedAt DESC")
     fun getAllContainers(): Flow<List<Container>>
 
+    /** One-shot read of every container, for the sync diff and for a snapshot build. */
+    @Query("SELECT * FROM containers ORDER BY updatedAt DESC")
+    suspend fun getAllContainersDirect(): List<Container>
+
     @Query("SELECT * FROM containers WHERE id = :containerId")
     fun getContainerByIdFlow(containerId: String): Flow<Container?>
 

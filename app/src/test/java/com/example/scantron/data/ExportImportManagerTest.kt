@@ -345,4 +345,65 @@ class ExportImportManagerTest {
             assertTrue(result.message.contains("Unsupported export version"))
             assertEquals(1, repository.getAllContainersDirect().size)
         }
+
+        // ---- Live sync writes the same document ------------------------------------------------
+        //
+        // Live sync does not go through exportToJsonString: it already holds the merged rows in
+        // memory, so it serializes them with buildDocument. That is only safe if the two writers
+        // agree, because a document that a peer accepted over the wire and the same document on a
+        // USB stick have to mean the same thing. These tests pin the two together.
+
+        @Test
+        fun `a sync-built document is identical to an export of the same rows`() = runBlocking {
+            repository.createOrUpdateContainer(Container(id = "BOX-101", name = "Power Tools"))
+            repository.saveItem(ContainerItem(containerId = "BOX-101", name = "Drill", barcode = "AAA"))
+            repository.createOrUpdateContainer(Container(id = "EMPTY-1"))
+
+            val containers = repository.getAllContainersDirect()
+            val items = repository.snapshotDocument().items
+
+            // A fixed timestamp, because the two writers otherwise stamp "now" and would differ on
+            // that field alone - which would hide a real difference in the rows themselves.
+            val stamp = 1705318200000L
+            val fromSync = ExportImportManager.buildDocument(containers, items, exportedAtMillis = stamp)
+            val fromExport = manager.exportToJsonString()
+
+            // Compared as text: Android's org.json.JSONObject does not override equals, so asserting
+            // on the objects themselves would compare identity and pass or fail for the wrong reason.
+            assertEquals(
+                JSONObject(fromExport).put("exportedAt", "fixed").toString(),
+                JSONObject(fromSync).put("exportedAt", "fixed").toString(),
+            )
+        }
+
+        @Test
+        fun `a sync-applied snapshot round trips through a file import`() = runBlocking {
+            // The property that matters: what live sync writes, a file import reads back to the same
+            // rows - same container metadata, same item identity, same order.
+            repository.createOrUpdateContainer(Container(id = "BOX-101", name = "Power Tools"))
+            val drill = repository.saveItem(
+                ContainerItem(containerId = "BOX-101", name = "Drill", barcode = "AAA", quantity = 3),
+            )
+            repository.createOrUpdateContainer(Container(id = "EMPTY-1"))
+
+            val snapshot = ExportImportManager.buildDocument(
+                containers = repository.getAllContainersDirect(),
+                items = repository.snapshotDocument().items,
+            )
+
+            repository.clearAllData()
+            val result = importJson(snapshot)
+
+            assertTrue(result.success)
+            assertEquals(2, result.containerCount)
+            assertEquals(1, result.itemCount)
+            // Order is whatever the DAO returns; what matters is that the same two containers come
+            // back, not the order they happen to be read in.
+            assertEquals(
+                listOf("BOX-101", "EMPTY-1"),
+                repository.getAllContainersDirect().map { it.id }.sorted(),
+            )
+            assertEquals(drill.uuid, repository.getItemsForContainerDirect("BOX-101").single().uuid)
+            assertEquals(3, repository.getItemsForContainerDirect("BOX-101").single().quantity)
+        }
     }

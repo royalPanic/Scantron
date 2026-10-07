@@ -68,6 +68,10 @@ interface ItemDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAllItems(items: List<ContainerItem>)
 
+    /** One-shot read of every row, for the sync diff and for a snapshot build. */
+    @Query("SELECT * FROM container_items ORDER BY updatedAt DESC")
+    suspend fun getAllItemsDirect(): List<ContainerItem>
+
     @Transaction
     @Query(
         "SELECT * FROM container_items " +

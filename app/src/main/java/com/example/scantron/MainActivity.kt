@@ -56,8 +56,8 @@ import com.example.scantron.ui.navigation.UriEncoder
 import com.example.scantron.ui.search.SearchScreen
 import com.example.scantron.ui.search.SearchViewModel
 import com.example.scantron.ui.theme.ScantronTheme
-import com.example.scantron.ui.transfer.TransferScreen
-import com.example.scantron.ui.transfer.TransferViewModel
+import com.example.scantron.ui.sync.SyncScreen
+import com.example.scantron.ui.sync.SyncViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -68,7 +68,7 @@ import kotlinx.coroutines.withContext
 private val ScantronNavItems = listOf(
     ScantronNavItem(NavRoutes.Containers.route, Icons.Default.Inventory2, "Containers"),
     ScantronNavItem(NavRoutes.Search.route, Icons.Default.Search, "Search Items"),
-    ScantronNavItem(NavRoutes.Transfer.route, Icons.Default.SwapHoriz, "Transfer"),
+    ScantronNavItem(NavRoutes.Transfer.route, Icons.Default.SwapHoriz, "Sync"),
 )
 
 class MainActivity : ComponentActivity() {
@@ -349,10 +349,10 @@ fun ScantronApp() {
             }
 
                         composable(NavRoutes.Transfer.route) {
-                            val transferViewModel: TransferViewModel = viewModel(
-                                factory = TransferViewModel.Factory(context, repository),
+                            val syncViewModel: SyncViewModel = viewModel(
+                                factory = SyncViewModel.Factory(context, repository),
                             )
-                            TransferScreen(viewModel = transferViewModel)
+                            SyncScreen(viewModel = syncViewModel)
                         }
 
             composable(
